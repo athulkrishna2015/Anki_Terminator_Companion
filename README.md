@@ -5,6 +5,7 @@
 An elegant, dynamic performance-optimization add-on for Anki. 
 
 This companion addon is designed to run seamlessly alongside the original **Anki Terminator V2 - ChatGPT DeepSeek Sidebar for Reviewer** (`1468920185`). By dynamically patching memory during Anki startup, it eliminates high-CPU bottlenecks completely **without modifying a single line of code in the original addon's directory**.
+<img width="918" height="113" alt="Screenshot_20260614_133846" src="https://github.com/user-attachments/assets/e7b9fa55-1d3b-461a-8646-f1529605be45" />
 
 ---
 
