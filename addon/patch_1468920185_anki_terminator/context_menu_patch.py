@@ -344,6 +344,44 @@ def patch(add_fields_mod, dock_web_view_mod=None):
                 
                 def explain_cloze(selected_text):
                     import re
+                    import unicodedata
+                    
+                    def is_delimiter(c):
+                        return unicodedata.category(c).startswith(('Z', 'P', 'S', 'C')) or c.isspace()
+                        
+                    def replace_standalone(text, ans, replacement):
+                        if not ans:
+                            return text
+                        escaped_ans = re.escape(ans)
+                        pattern = re.compile(escaped_ans, re.IGNORECASE)
+                        result = []
+                        last_idx = 0
+                        for match in pattern.finditer(text):
+                            start, end = match.span()
+                            
+                            # Check boundary before the match
+                            standalone_before = True
+                            if start > 0:
+                                char_before = text[start - 1]
+                                if not is_delimiter(ans[0]) and not is_delimiter(char_before):
+                                    standalone_before = False
+                                    
+                            # Check boundary after the match
+                            standalone_after = True
+                            if end < len(text):
+                                char_after = text[end]
+                                if not is_delimiter(ans[-1]) and not is_delimiter(char_after):
+                                    standalone_after = False
+                                    
+                            result.append(text[last_idx:start])
+                            if standalone_before and standalone_after:
+                                result.append(replacement)
+                            else:
+                                result.append(text[start:end])
+                            last_idx = end
+                        result.append(text[last_idx:])
+                        return "".join(result)
+                        
                     processed_text = selected_text
                     
                     # 1. Direct raw braces replacement (if selection contains raw braces)
@@ -383,8 +421,7 @@ def patch(add_fields_mod, dock_web_view_mod=None):
                             replacements.sort(key=lambda x: len(x[0]), reverse=True)
                             
                             for ans, replacement_text in replacements:
-                                escaped_ans = re.escape(ans)
-                                processed_text = re.sub(escaped_ans, replacement_text, processed_text, flags=re.IGNORECASE)
+                                processed_text = replace_standalone(processed_text, ans, replacement_text)
                         except Exception as e:
                             companion_logger.log(f"[Explain Cloze] Error processing active cloze: {e}")
                             
