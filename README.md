@@ -105,6 +105,12 @@ Please refer to [DEVELOPMENT.md](DEVELOPMENT.md) for details on project director
 
 ## Changelog
 
+### June 14, 2026 (v1.7.2)
+- **Robust Unicode Word Boundary Checks for Cloze Censoring**:
+  - Replaced regular expression `\w` word boundaries with a custom Unicode character classification algorithm (`unicodedata`).
+  - Correctly recognizes and preserves combining characters, marks, and script-specific conjuncts (such as Malayalam viramas/consonant conjuncts).
+  - Prevents active cloze answers (e.g., `പുലി`) from being incorrectly censored when they occur as substrings of larger words (e.g., `കരിമ്പുലി`).
+
 ### June 13, 2026 (v1.7.1)
 - **Rich Text & Table Selection Preservation**:
   - Added full support for rich text elements when right-clicking and copying selections to Anki fields.
