@@ -431,6 +431,46 @@ def patch(dock_web_view_mod):
     # Hook last_text_toolbar to replace "AI" button with QToolButton icon dropdown
     original_last_text_toolbar = dock_web_view_mod.ResizableWebView.last_text_toolbar
     
+    def get_cpp_pointer(widget):
+        try:
+            import PyQt6.sip as sip
+            return sip.unwrapinstance(widget)
+        except ImportError:
+            pass
+        try:
+            import PyQt5.sip as sip
+            return sip.unwrapinstance(widget)
+        except ImportError:
+            pass
+        try:
+            import sip
+            return sip.unwrapinstance(widget)
+        except ImportError:
+            pass
+        try:
+            import shiboken6
+            return shiboken6.getCppPointer(widget)
+        except ImportError:
+            pass
+        try:
+            import shiboken2
+            return shiboken2.getCppPointer(widget)
+        except ImportError:
+            pass
+        return None
+
+    def update_tab_icon(dock_widget, icon):
+        ptr = get_cpp_pointer(dock_widget)
+        if not ptr:
+            return
+        from aqt import mw
+        from aqt.qt import QTabBar
+        for tabbar in mw.findChildren(QTabBar):
+            for index in range(tabbar.count()):
+                if tabbar.tabData(index) == ptr:
+                    tabbar.setTabIcon(index, icon)
+                    return
+
     def get_ai_icon(ai_type):
         import os
         from aqt.qt import QIcon
@@ -527,10 +567,16 @@ def patch(dock_web_view_mod):
                 
                 # Initial window icon setup
                 try:
-                    self.setWindowIcon(get_ai_icon(now_ai))
+                    current_config = mw.addonManager.getConfig("1468920185") or {}
+                    now_ai = current_config.get("now_AI_type", "Chat_GPT")
+                    icon = get_ai_icon(now_ai)
+                    self.setWindowIcon(icon)
                     dock_widget = getattr(dock_web_view_mod, "chatGPTdockWidget", None)
                     if dock_widget:
-                        dock_widget.setWindowIcon(get_ai_icon(now_ai))
+                        dock_widget.setWindowIcon(icon)
+                        update_tab_icon(dock_widget, icon)
+                        QTimer.singleShot(1000, lambda: update_tab_icon(dock_widget, icon))
+                        QTimer.singleShot(5000, lambda: update_tab_icon(dock_widget, icon))
                 except Exception as e:
                     companion_logger.log(f"[Sync Icon] Failed to initialize sidebar icon: {e}")
 
@@ -560,6 +606,8 @@ def patch(dock_web_view_mod):
             dock_widget = getattr(dock_web_view_mod, "chatGPTdockWidget", None)
             if dock_widget:
                 dock_widget.setWindowIcon(icon)
+                update_tab_icon(dock_widget, icon)
+                QTimer.singleShot(500, lambda: update_tab_icon(dock_widget, icon))
         except Exception as e:
             companion_logger.log(f"[Sync Icon] Failed to update sidebar icon: {e}")
             
