@@ -105,6 +105,11 @@ Please refer to [DEVELOPMENT.md](DEVELOPMENT.md) for details on project director
 
 ## Changelog
 
+### June 19, 2026 (v1.7.3)
+- **Dynamic Deck Selection for Add to New Card Action**:
+  - Automatically sets the target deck in the "Add Cards" dialog to match the currently reviewed card's deck.
+  - Safely handles filtered/cram decks by extracting and targeting the card's original home deck (`card.odid`) instead of the temporary filtered deck.
+
 ### June 14, 2026 (v1.7.2)
 - **Robust Unicode Word Boundary Checks for Cloze Censoring**:
   - Replaced regular expression `\w` word boundaries with a custom Unicode character classification algorithm (`unicodedata`).
