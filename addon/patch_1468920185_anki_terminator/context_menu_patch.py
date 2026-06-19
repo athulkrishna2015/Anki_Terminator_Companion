@@ -215,7 +215,25 @@ def on_add_to_new_card(webview):
             return
 
         from aqt import mw, dialogs
+        
+        # 1. Determine current deck from reviewer card
+        current_deck_id = None
+        if hasattr(mw, 'reviewer') and mw.reviewer.card:
+            card = mw.reviewer.card
+            current_deck_id = card.odid if (hasattr(card, 'odid') and card.odid) else card.did
+            
         add_cards = dialogs.open("AddCards", mw)
+        
+        # 2. Set the deck in AddCards to the current reviewing card's deck
+        if current_deck_id:
+            if hasattr(add_cards, 'set_deck'):
+                add_cards.set_deck(current_deck_id)
+            else:
+                chooser = getattr(add_cards, 'deck_chooser', getattr(add_cards, 'deckChooser', None))
+                if chooser:
+                    if hasattr(chooser, 'selected_deck_id'):
+                        chooser.selected_deck_id = current_deck_id
+                        
         note = add_cards.editor.note
         if note and note.keys():
             first_field = note.keys()[0]
