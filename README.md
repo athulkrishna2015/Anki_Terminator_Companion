@@ -105,6 +105,13 @@ Please refer to [DEVELOPMENT.md](DEVELOPMENT.md) for details on project director
 
 ## Changelog
 
+### June 20, 2026 (v1.7.4)
+- **Active AI Icon & Tab Bar Sync**:
+  - Fixed a configuration loading error (`now_ai` NameError) during initial toolbar construction.
+  - Implemented dynamic pointer-matching (`tabData(index)`) to automatically synchronize the sidebar tab icon when the dock widget is tabbed/tabified inside the main QMainWindow.
+- **AI-Hints Cloze Skipping**:
+  - Added a double-brace (`{{`) skip check inside the optimized `clean_ai_hints_from_text` loop to prevent cloze deletions from being stripped and cleared.
+
 ### June 19, 2026 (v1.7.3)
 - **Dynamic Deck Selection for Add to New Card Action**:
   - Automatically sets the target deck in the "Add Cards" dialog to match the currently reviewed card's deck.

@@ -36,6 +36,12 @@ def apply_ai_hints_patch():
                             start_idx = cleaned.find("{", idx)
                             if start_idx == -1:
                                 break
+                            
+                            # Skip cloze deletions (which start with "{{")
+                            if cleaned[start_idx:start_idx+2] == "{{":
+                                idx = start_idx + 2
+                                continue
+                                
                             chunk = cleaned[start_idx:start_idx+150]
                             if any(f'"c{i}"' in chunk for i in range(1, 10)) and ('"hints"' in chunk or '"options"' in chunk):
                                 brace_count = 0
