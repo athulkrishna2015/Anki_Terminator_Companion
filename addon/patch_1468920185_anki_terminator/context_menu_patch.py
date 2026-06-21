@@ -14,21 +14,26 @@ JS_HTML_EXTRACTOR = r"""
         function decodeGoogleComment(s) {
             if (!s) return s;
             
-            // 1. Decode double escapes and unicode first
+            // 0. Decode unicode escapes first to avoid false-positives in command checks
+            s = s.replace(/\\u([0-9a-fA-F]{4})/g, function(match, grp) {
+                return String.fromCharCode(parseInt(grp, 16));
+            });
+            
+            // 1. Decode double escapes (halve backslashes up to twice if needed)
             var tempStr = s.replace(/\\\\/g, '@');
             var hasSingleEscaped = /\\[a-zA-Z]/.test(tempStr);
-            var hasDoubleEscaped = /\\\\[a-zA-Z]/.test(s) || /\\u[0-9a-fA-F]{4}/.test(s);
+            var hasDoubleEscaped = /\\\\[a-zA-Z]/.test(s);
             var isDoubleEscaped = hasDoubleEscaped && !hasSingleEscaped;
             
             if (isDoubleEscaped) {
-                s = s.replace(/\\u([0-9a-fA-F]{4})/g, function(match, grp) {
-                    return String.fromCharCode(parseInt(grp, 16));
-                });
                 s = s.replace(/\\\\/g, '\\');
-            } else {
-                s = s.replace(/\\u([0-9a-fA-F]{4})/g, function(match, grp) {
-                    return String.fromCharCode(parseInt(grp, 16));
-                });
+                // Check if it was 4-backslash escaped and needs a second halving
+                var tempStr2 = s.replace(/\\\\/g, '@');
+                var hasSingleEscaped2 = /\\[a-zA-Z]/.test(tempStr2);
+                var hasDoubleEscaped2 = /\\\\[a-zA-Z]/.test(s);
+                if (hasDoubleEscaped2 && !hasSingleEscaped2) {
+                    s = s.replace(/\\\\/g, '\\');
+                }
             }
             
             // 2. Decode HTML entities (twice)
