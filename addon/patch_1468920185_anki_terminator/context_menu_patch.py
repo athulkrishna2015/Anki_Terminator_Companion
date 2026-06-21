@@ -10,22 +10,34 @@ JS_HTML_EXTRACTOR = r"""
     if (sel.rangeCount > 0) {
         var range = sel.getRangeAt(0).cloneRange();
         
-        // Helper to decode HTML entities, unicode, and double backslash escapes
-        function decodeLatex(s) {
+        // Dedicated helper for Google search comments with double-escaping/unicode logic
+        function decodeGoogleComment(s) {
             if (!s) return s;
-            // 1. Decode HTML entities
-            var temp = document.createElement("div");
-            temp.innerHTML = s;
-            s = temp.textContent || temp.innerText || s;
             
-            // 2. Decode double escapes
-            var isDoubleEscaped = (/\\\\[a-zA-Z]+/.test(s) || /\\u[0-9a-fA-F]{4}/.test(s)) && !/(?<!\\)\\(?!u[0-9a-fA-F]{4})[a-zA-Z]+/.test(s);
+            // 1. Decode double escapes and unicode first
+            var tempStr = s.replace(/\\\\/g, '@');
+            var hasSingleEscaped = /\\[a-zA-Z]/.test(tempStr);
+            var hasDoubleEscaped = /\\\\[a-zA-Z]/.test(s) || /\\u[0-9a-fA-F]{4}/.test(s);
+            var isDoubleEscaped = hasDoubleEscaped && !hasSingleEscaped;
+            
             if (isDoubleEscaped) {
                 s = s.replace(/\\u([0-9a-fA-F]{4})/g, function(match, grp) {
                     return String.fromCharCode(parseInt(grp, 16));
                 });
                 s = s.replace(/\\\\/g, '\\');
+            } else {
+                s = s.replace(/\\u([0-9a-fA-F]{4})/g, function(match, grp) {
+                    return String.fromCharCode(parseInt(grp, 16));
+                });
             }
+            
+            // 2. Decode HTML entities (twice)
+            var temp = document.createElement("div");
+            temp.innerHTML = s;
+            s = temp.textContent || temp.innerText || s;
+            temp.innerHTML = s;
+            s = temp.textContent || temp.innerText || s;
+            
             return s;
         }
 
@@ -160,7 +172,7 @@ JS_HTML_EXTRACTOR = r"""
             var val = node.nodeValue || "";
             var match = val.match(/data-(?:xpm-)?(?:latex|tex|formula|math)(?:\s*\\?u003d|\s*\\?=\s*|=)\s*(?:\\&quot;|&quot;|\\\"|\"|\\\'|\')([\s\S]*?)(?:\\&quot;|&quot;|\\\"|\"|\\\'|\')/);
             if (match) {
-                var latex = decodeLatex(match[1]);
+                var latex = decodeGoogleComment(match[1]);
                 
                 var parent = node.parentNode;
                 if (parent && parent !== container) {
@@ -207,7 +219,6 @@ JS_HTML_EXTRACTOR = r"""
             if (container.contains(el)) {
                 var latex = extractLatex(el);
                 if (latex) {
-                    latex = decodeLatex(latex);
                     var isBlock = isDisplayMode(el);
                     var replacement = isBlock ? ("\\[" + latex + "\\]") : ("\\(" + latex + "\\)");
                     el.replaceWith(document.createTextNode(replacement));
