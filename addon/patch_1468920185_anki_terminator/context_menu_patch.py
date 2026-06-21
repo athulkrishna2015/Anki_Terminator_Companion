@@ -10,13 +10,32 @@ JS_HTML_EXTRACTOR = r"""
     if (sel.rangeCount > 0) {
         var range = sel.getRangeAt(0).cloneRange();
         
+        // Helper to decode HTML entities, unicode, and double backslash escapes
+        function decodeLatex(s) {
+            if (!s) return s;
+            // 1. Decode HTML entities
+            var temp = document.createElement("div");
+            temp.innerHTML = s;
+            s = temp.textContent || temp.innerText || s;
+            
+            // 2. Decode double escapes
+            var isDoubleEscaped = (/\\\\[a-zA-Z]+/.test(s) || /\\u[0-9a-fA-F]{4}/.test(s)) && !/(?<!\\)\\(?!u[0-9a-fA-F]{4})[a-zA-Z]+/.test(s);
+            if (isDoubleEscaped) {
+                s = s.replace(/\\u([0-9a-fA-F]{4})/g, function(match, grp) {
+                    return String.fromCharCode(parseInt(grp, 16));
+                });
+                s = s.replace(/\\\\/g, '\\');
+            }
+            return s;
+        }
+
         // Helper to extract LaTeX from various math elements
         function extractLatex(el) {
             if (el.tagName === 'ANKI-MATHJAX') {
-                return el.getAttribute('data-formula') || el.innerText || '';
+                return el.getAttribute('data-formula') || el.getAttribute('data-math') || el.getAttribute('data-tex') || el.getAttribute('data-latex') || el.textContent || el.innerText || '';
             }
             if (el.classList && (el.classList.contains('math-block') || el.classList.contains('math-inline'))) {
-                return el.getAttribute('data-math') || '';
+                return el.getAttribute('data-math') || el.getAttribute('data-tex') || el.getAttribute('data-latex') || el.getAttribute('data-formula') || el.textContent || '';
             }
             var ann = el.querySelector('annotation[encoding="application/x-tex"]');
             if (ann && ann.textContent) {
@@ -56,9 +75,20 @@ JS_HTML_EXTRACTOR = r"""
             if (el.tagName === 'IMG') {
                 var alt = el.getAttribute('alt');
                 if (alt) {
-                    var match = alt.trim().match(/^\{\\displaystyle\s*([\s\S]*?)\}$/);
+                    var trimmed = alt.trim();
+                    var match = trimmed.match(/^\{\\displaystyle\s*([\s\S]*?)\}$/);
                     if (match) return match[1].trim();
-                    return alt.trim();
+                    
+                    var hasMathContext = el.classList && (
+                        el.classList.contains('mwe-math-fallback-image-inline') ||
+                        el.classList.contains('mwe-math-fallback-image-display') ||
+                        el.classList.contains('tex') ||
+                        el.classList.contains('latex') ||
+                        el.classList.contains('math')
+                    );
+                    if (hasMathContext || trimmed.startsWith('\\') || trimmed.startsWith('$') || trimmed.startsWith('\\(') || trimmed.startsWith('\\[')) {
+                        return trimmed;
+                    }
                 }
             }
             return null;
@@ -119,12 +149,65 @@ JS_HTML_EXTRACTOR = r"""
             n.remove();
         });
 
+        // 3.5 Process LaTeX from Google UI comments (TgQPHd / data-xpm-latex format)
+        var commentWalker = document.createTreeWalker(container, NodeFilter.SHOW_COMMENT, null);
+        var commentNodes = [];
+        var cNode;
+        while (cNode = commentWalker.nextNode()) {
+            commentNodes.push(cNode);
+        }
+        commentNodes.forEach(function(node) {
+            var val = node.nodeValue || "";
+            var match = val.match(/data-(?:xpm-)?(?:latex|tex|formula|math)(?:\s*\\?u003d|\s*\\?=\s*|=)\s*(?:\\&quot;|&quot;|\\\"|\"|\\\'|\')([\s\S]*?)(?:\\&quot;|&quot;|\\\"|\"|\\\'|\')/);
+            if (match) {
+                var latex = decodeLatex(match[1]);
+                
+                var parent = node.parentNode;
+                if (parent && parent !== container) {
+                    var isMathParent = false;
+                    var tagName = parent.tagName.toUpperCase();
+                    if (tagName === "SPAN" || tagName === "DIV") {
+                        var hasText = false;
+                        for (var i = 0; i < parent.childNodes.length; i++) {
+                            var child = parent.childNodes[i];
+                            if (child.nodeType === Node.TEXT_NODE && child.nodeValue.trim() !== "") {
+                                hasText = true;
+                                break;
+                            }
+                        }
+                        if (!hasText) {
+                            isMathParent = true;
+                        }
+                    }
+                    
+                    var isBlock = false;
+                    if (parent.getAttribute && parent.getAttribute('display') === 'block') {
+                        isBlock = true;
+                    } else if (parent.classList && parent.classList.contains('math-block')) {
+                        isBlock = true;
+                    }
+                    var replacement = isBlock ? ("\\[" + latex + "\\]") : ("\\(" + latex + "\\)");
+                    
+                    if (isMathParent) {
+                        parent.replaceWith(document.createTextNode(replacement));
+                    } else {
+                        var prev = node.previousElementSibling;
+                        if (prev) {
+                            prev.parentNode.removeChild(prev);
+                        }
+                        node.replaceWith(document.createTextNode(replacement));
+                    }
+                }
+            }
+        });
+
         // 4. Process math elements inside the cloned container
         var mathElements = Array.from(container.querySelectorAll(mathSelectors));
         mathElements.forEach(function(el) {
             if (container.contains(el)) {
                 var latex = extractLatex(el);
                 if (latex) {
+                    latex = decodeLatex(latex);
                     var isBlock = isDisplayMode(el);
                     var replacement = isBlock ? ("\\[" + latex + "\\]") : ("\\(" + latex + "\\)");
                     el.replaceWith(document.createTextNode(replacement));
@@ -136,6 +219,19 @@ JS_HTML_EXTRACTOR = r"""
         var artifacts = container.querySelectorAll("script, style, math, .katex-mathml, mjx-assistive-mml, annotation, semantics, .katex-html, .katex-fallback");
         artifacts.forEach(function(node) {
             node.remove();
+        });
+        
+        // Remove ALL comment nodes to prevent comment garbage
+        var remainingComments = [];
+        var walkComments = document.createTreeWalker(container, NodeFilter.SHOW_COMMENT, null);
+        var cNode;
+        while (cNode = walkComments.nextNode()) {
+            remainingComments.push(cNode);
+        }
+        remainingComments.forEach(function(node) {
+            if (node.parentNode) {
+                node.parentNode.removeChild(node);
+            }
         });
 
         // 6. Walk text nodes and replace $...$ and $$...$$
