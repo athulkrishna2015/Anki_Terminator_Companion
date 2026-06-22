@@ -84,8 +84,15 @@ class GeneralTab(QWidget):
 
         # Multiple Fields Toggle
         self.send_multiple_chk = QCheckBox("Send Multiple Fields to AI")
-        anki_terminator_config = mw.addonManager.getConfig("1468920185") or {}
-        self.send_multiple_chk.setChecked(anki_terminator_config.get("send_multiple_fields", False))
+        send_multiple_val = False
+        installed_addons = mw.addonManager.allAddons()
+        for target_id in ["1468920185", "1448033349"]:
+            if target_id in installed_addons:
+                cfg = mw.addonManager.getConfig(target_id) or {}
+                if cfg.get("send_multiple_fields", False):
+                    send_multiple_val = True
+                    break
+        self.send_multiple_chk.setChecked(send_multiple_val)
         self.send_multiple_chk.setToolTip("Concatenates all non-empty fields of the current card and sends them to the AI instead of just the priority field.")
 
         group_layout.addWidget(self.lifecycle_chk)

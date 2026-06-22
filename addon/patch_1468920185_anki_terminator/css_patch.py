@@ -24,6 +24,7 @@ def inject_gemini_performance_css(page: QWebEnginePage):
     companion_logger.log("CSS patch injected successfully (Gemini animations/transitions disabled)")
 
 def patch(dock_web_view_mod):
+    target_addon_id = dock_web_view_mod.__name__.split('.')[0]
     original_inject = dock_web_view_mod.ResizableWebView.inject_javascript
 
     def patched_inject(self):
@@ -36,9 +37,9 @@ def patch(dock_web_view_mod):
             return
 
         # Companion optimization for Gemini
-        addon_config = mw.addonManager.getConfig("1468920185")
+        addon_config = mw.addonManager.getConfig(target_addon_id)
         if addon_config and addon_config.get("now_AI_type") == "Google_Bard":
             inject_gemini_performance_css(self.webpage)
 
     dock_web_view_mod.ResizableWebView.inject_javascript = patched_inject
-    companion_logger.log("Successfully hooked ResizableWebView.inject_javascript for CSS injection.")
+    companion_logger.log(f"Successfully hooked ResizableWebView.inject_javascript for CSS injection (target: {target_addon_id}).")

@@ -72,26 +72,43 @@ def apply_ai_hints_patch():
         companion_logger.log(f"[AI-Hints Patch] Patch failed: {e}")
 
 def apply_patches():
-    # 1. Apply AdBlocker patches
-    try:
-        ad_blocker_mod = importlib.import_module("1468920185.ad_blocker")
-        from . import ad_blocker_patch
-        ad_blocker_patch.patch(ad_blocker_mod)
-    except Exception as e:
-        companion_logger.log(f"[Terminator Companion] AdBlocker patch failed: {e}")
+    # Find all active target IDs
+    active_targets = []
+    for addon_id in ["1468920185", "1448033349"]:
+        try:
+            # Check if we can import the dock_web_view of this addon
+            importlib.import_module(f"{addon_id}.dock_web_view")
+            active_targets.append(addon_id)
+        except ImportError:
+            continue
+            
+    if not active_targets:
+        companion_logger.log("[Terminator Companion] No active Anki Terminator addons found to patch.")
+        return
 
-    # 2. Apply WebEngine, Lifecycle, and Context Menu patches
-    try:
-        dock_web_view_mod = importlib.import_module("1468920185.dock_web_view")
-        add_fields_mod = importlib.import_module("1468920185.context_menu.add_fields")
-        from . import css_patch
-        from . import lifecycle_patch
-        from . import context_menu_patch
-        css_patch.patch(dock_web_view_mod)
-        lifecycle_patch.patch(dock_web_view_mod)
-        context_menu_patch.patch(add_fields_mod, dock_web_view_mod)
-    except Exception as e:
-        companion_logger.log(f"[Terminator Companion] Webview/Lifecycle/Context Menu patch failed: {e}")
+    for target_id in active_targets:
+        companion_logger.log(f"[Terminator Companion] Found target addon {target_id}. Applying patches...")
+        
+        # 1. Apply AdBlocker patches
+        try:
+            ad_blocker_mod = importlib.import_module(f"{target_id}.ad_blocker")
+            from . import ad_blocker_patch
+            ad_blocker_patch.patch(ad_blocker_mod)
+        except Exception as e:
+            companion_logger.log(f"[Terminator Companion] [{target_id}] AdBlocker patch failed: {e}")
+
+        # 2. Apply WebEngine, Lifecycle, and Context Menu patches
+        try:
+            dock_web_view_mod = importlib.import_module(f"{target_id}.dock_web_view")
+            add_fields_mod = importlib.import_module(f"{target_id}.context_menu.add_fields")
+            from . import css_patch
+            from . import lifecycle_patch
+            from . import context_menu_patch
+            css_patch.patch(dock_web_view_mod)
+            lifecycle_patch.patch(dock_web_view_mod)
+            context_menu_patch.patch(add_fields_mod, dock_web_view_mod)
+        except Exception as e:
+            companion_logger.log(f"[Terminator Companion] [{target_id}] Webview/Lifecycle/Context Menu patch failed: {e}")
 
     # 3. Apply AI-Hints optimization patch
     apply_ai_hints_patch()

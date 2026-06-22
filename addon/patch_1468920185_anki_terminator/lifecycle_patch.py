@@ -4,7 +4,8 @@ from aqt.qt import *
 from ..logger import companion_logger
 
 def patch(dock_web_view_mod):
-    companion_logger.log("[Lifecycle Patch] Initiating Flicker-Free QStackedWidget and Response Monitor hooks...")
+    target_addon_id = dock_web_view_mod.__name__.split('.')[0]
+    companion_logger.log(f"[Lifecycle Patch] Initiating Flicker-Free QStackedWidget and Response Monitor hooks for target {target_addon_id}...")
 
     from html.parser import HTMLParser
     import html
@@ -475,7 +476,7 @@ def patch(dock_web_view_mod):
         import os
         from aqt.qt import QIcon
         try:
-            path_manager = importlib.import_module("1468920185.path_manager")
+            path_manager = importlib.import_module(f"{target_addon_id}.path_manager")
             addon_dir = os.path.dirname(path_manager.__file__)
             logo_map = {
                 path_manager.CHAT_GPT: path_manager.CHAT_GPT_LOGO,
@@ -516,7 +517,7 @@ def patch(dock_web_view_mod):
                 menu = QMenu(btn)
                 
                 try:
-                    path_manager = importlib.import_module("1468920185.path_manager")
+                    path_manager = importlib.import_module(f"{target_addon_id}.path_manager")
                     themes = [t for t in path_manager.THEMES if t not in path_manager.WITHOUT_THEMES]
                 except Exception:
                     themes = ["Chat_GPT", "Google_Bard", "Google_AI_mode", "Bing_Chat", "Claude", "perplexity", "DeepSeek", "Grok_AI", "Duck_AI"]
@@ -534,7 +535,7 @@ def patch(dock_web_view_mod):
                 btn.setMenu(menu)
                 
                 def on_ai_selected(selected_ai):
-                    current_config = mw.addonManager.getConfig("1468920185") or {}
+                    current_config = mw.addonManager.getConfig(target_addon_id) or {}
                     active_ai = current_config.get("now_AI_type", "Chat_GPT")
                     
                     if selected_ai == active_ai:
@@ -550,10 +551,10 @@ def patch(dock_web_view_mod):
                     else:
                         companion_logger.log(f"[AI Dropdown] Changing AI to '{selected_ai}'...")
                         current_config["now_AI_type"] = selected_ai
-                        mw.addonManager.writeConfig("1468920185", current_config)
+                        mw.addonManager.writeConfig(target_addon_id, current_config)
                         
                         try:
-                            path_manager = importlib.import_module("1468920185.path_manager")
+                            path_manager = importlib.import_module(f"{target_addon_id}.path_manager")
                             THEME_CHANGE = path_manager.THEME_CHANGE
                             PYGsound = dock_web_view_mod.PYGsound
                             PYGsound(THEME_CHANGE)
@@ -567,7 +568,7 @@ def patch(dock_web_view_mod):
                 
                 # Initial window icon setup
                 try:
-                    current_config = mw.addonManager.getConfig("1468920185") or {}
+                    current_config = mw.addonManager.getConfig(target_addon_id) or {}
                     now_ai = current_config.get("now_AI_type", "Chat_GPT")
                     icon = get_ai_icon(now_ai)
                     self.setWindowIcon(icon)
@@ -599,7 +600,7 @@ def patch(dock_web_view_mod):
     def new_change_AI_type(self, update=True):
         original_change_AI_type(self, update=update)
         try:
-            config = mw.addonManager.getConfig("1468920185") or {}
+            config = mw.addonManager.getConfig(target_addon_id) or {}
             now_ai = config.get("now_AI_type", "Chat_GPT")
             icon = get_ai_icon(now_ai)
             self.setWindowIcon(icon)
@@ -869,7 +870,7 @@ def patch(dock_web_view_mod):
 
         def patched_get_field_text(self, card=None):
             config = mw.addonManager.getConfig(__name__.split(".")[0]) or {}
-            original_config = mw.addonManager.getConfig("1468920185") or {}
+            original_config = mw.addonManager.getConfig(target_addon_id) or {}
 
             if card is None and mw.state == "review":
                 card = mw.reviewer.card
@@ -897,7 +898,7 @@ def patch(dock_web_view_mod):
 
     # Hook the configuration UI SetPopupConfig
     try:
-        config_mod = importlib.import_module("1468920185.config.PopUpAnkiConfig")
+        config_mod = importlib.import_module(f"{target_addon_id}.config.PopUpAnkiConfig")
         original_config_init = config_mod.SetPopupConfig.__init__
         def new_config_init(self, *args, **kwargs):
             original_config_init(self, *args, **kwargs)
@@ -909,7 +910,7 @@ def patch(dock_web_view_mod):
                             fields_tab_widget = tab_widget.widget(i)
                             layout = fields_tab_widget.layout()
                             if layout:
-                                cfg = mw.addonManager.getConfig("1468920185") or {}
+                                cfg = mw.addonManager.getConfig(target_addon_id) or {}
                                 comp_cfg = mw.addonManager.getConfig(__name__.split(".")[0]) or {}
                                 
                                 self.send_multiple_fields_checkbox = QCheckBox("Send Multiple Fields")
@@ -929,9 +930,9 @@ def patch(dock_web_view_mod):
             try:
                 if hasattr(self, "send_multiple_fields_checkbox"):
                     val = self.send_multiple_fields_checkbox.isChecked()
-                    cfg = mw.addonManager.getConfig("1468920185") or {}
+                    cfg = mw.addonManager.getConfig(target_addon_id) or {}
                     cfg["send_multiple_fields"] = val
-                    mw.addonManager.writeConfig("1468920185", cfg)
+                    mw.addonManager.writeConfig(target_addon_id, cfg)
                 
                 if hasattr(self, "add_to_new_card_checkbox"):
                     val = self.add_to_new_card_checkbox.isChecked()
