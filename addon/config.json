@@ -9,6 +9,7 @@
     "enable_add_to_new_card": true,
     "enable_progress_bar": true,
     "enable_persistent_view": true,
+    "enable_clipboard_clearing": true,
     "show_wiki_button": true,
     "show_donate_button": true,
     "search_engine": "Google",

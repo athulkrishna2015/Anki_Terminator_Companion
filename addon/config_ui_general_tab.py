@@ -51,6 +51,10 @@ class GeneralTab(QWidget):
         self.persistent_view_chk.setChecked(self.config.get("enable_persistent_view", True))
         self.persistent_view_chk.setToolTip("Keeps the current page visible until the new one is fully loaded, preventing white/blank screens during navigation.")
 
+        self.clipboard_clear_chk = QCheckBox("Automatically Clear Clipboard after AI Paste")
+        self.clipboard_clear_chk.setChecked(self.config.get("enable_clipboard_clearing", True))
+        self.clipboard_clear_chk.setToolTip("Automatically clears the system clipboard 1.5 seconds after a prompt is sent to prevent clipboard pollution.")
+
         # Toolbar Settings
         self.toolbar_group = QGroupBox("Toolbar Settings")
         toolbar_layout = QVBoxLayout(self.toolbar_group)
@@ -104,6 +108,7 @@ class GeneralTab(QWidget):
         group_layout.addWidget(self.add_to_new_card_chk)
         group_layout.addWidget(self.progress_bar_chk)
         group_layout.addWidget(self.persistent_view_chk)
+        group_layout.addWidget(self.clipboard_clear_chk)
         group_layout.addWidget(self.send_multiple_chk)
         
         layout.addWidget(self.group)
@@ -142,6 +147,7 @@ class GeneralTab(QWidget):
             "enable_add_to_new_card": self.add_to_new_card_chk.isChecked(),
             "enable_progress_bar": self.progress_bar_chk.isChecked(),
             "enable_persistent_view": self.persistent_view_chk.isChecked(),
+            "enable_clipboard_clearing": self.clipboard_clear_chk.isChecked(),
             "show_wiki_button": self.show_wiki_chk.isChecked(),
             "show_donate_button": self.show_donate_chk.isChecked(),
             "search_engine": self.search_engine_combo.currentText(),
