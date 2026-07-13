@@ -255,16 +255,6 @@ def patch(dock_web_view_mod):
 
         search_layout.addWidget(self.address_bar)
         
-        # Anki's custom layouts often swallow clicks. Force focus on click.
-        class FocusFilter(QObject):
-            def eventFilter(self, obj, event):
-                if event.type() == QEvent.Type.MouseButtonPress:
-                    obj.setFocus()
-                return super().eventFilter(obj, event)
-                
-        self._focus_filter = FocusFilter(self.address_bar)
-        self.address_bar.installEventFilter(self._focus_filter)
-        
         # Helper to capture snapshot for persistent view
         def capture_persistent_snapshot():
             cfg = mw.addonManager.getConfig(__name__.split(".")[0]) or {}
@@ -307,6 +297,25 @@ def patch(dock_web_view_mod):
                 navigate_address(self, self.address_bar.text())
                 
         self.address_bar.returnPressed.connect(handle_return_pressed)
+
+        # Anki's custom layouts often swallow clicks and key presses. Force focus and intercept Return/Enter.
+        class FocusFilter(QObject):
+            def eventFilter(self, obj, event):
+                if event.type() == QEvent.Type.MouseButtonPress:
+                    obj.setFocus()
+                elif event.type() == QEvent.Type.ShortcutOverride:
+                    if event.key() in [Qt.Key.Key_Return, Qt.Key.Key_Enter]:
+                        event.accept()
+                        return True
+                elif event.type() == QEvent.Type.KeyPress:
+                    if event.key() in [Qt.Key.Key_Return, Qt.Key.Key_Enter]:
+                        handle_return_pressed()
+                        event.accept()
+                        return True
+                return super().eventFilter(obj, event)
+                
+        self._focus_filter = FocusFilter(self.address_bar)
+        self.address_bar.installEventFilter(self._focus_filter)
         
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setFixedHeight(2)
