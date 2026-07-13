@@ -86,11 +86,11 @@ def patch(ad_blocker_mod):
     # 2. Redefine AdBlocker class properties and matching logic
     AdBlockerClass = ad_blocker_mod.AdBlocker
     
-    # Reload properties with optimized split
-    (AdBlockerClass.block_pure_domains, 
-     AdBlockerClass.block_path_rules, 
-     AdBlockerClass.allow_pure_domains, 
-     AdBlockerClass.allow_path_rules) = optimized_load_ad_domains()
+    # Initialize properties as None for lazy loading
+    AdBlockerClass.block_pure_domains = None
+    AdBlockerClass.block_path_rules = None
+    AdBlockerClass.allow_pure_domains = None
+    AdBlockerClass.allow_path_rules = None
 
     # Redefine interceptRequest
     def optimized_intercept_request(self, info: QWebEngineUrlRequestInfo):
@@ -98,6 +98,13 @@ def patch(ad_blocker_mod):
         if not config.get("enable_adblocker_optimization", True):
             return original_intercept_request(self, info)
         try:
+            # Lazy load ad block rules on demand
+            if AdBlockerClass.block_pure_domains is None:
+                (AdBlockerClass.block_pure_domains, 
+                 AdBlockerClass.block_path_rules, 
+                 AdBlockerClass.allow_pure_domains, 
+                 AdBlockerClass.allow_path_rules) = optimized_load_ad_domains()
+
             url = info.requestUrl().toString()
             first_party_url = info.firstPartyUrl().toString()
 

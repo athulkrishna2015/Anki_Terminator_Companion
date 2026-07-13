@@ -91,7 +91,22 @@ def apply_patches():
         
         # 1. Apply AdBlocker patches
         try:
-            ad_blocker_mod = importlib.import_module(f"{target_id}.ad_blocker")
+            # Temporarily mock builtins.open to prevent parsing easylist.txt during import
+            import builtins
+            original_open = builtins.open
+            
+            def custom_open(file, *args, **kwargs):
+                if isinstance(file, str) and "easylist.txt" in file:
+                    import io
+                    return io.StringIO("")
+                return original_open(file, *args, **kwargs)
+                
+            builtins.open = custom_open
+            try:
+                ad_blocker_mod = importlib.import_module(f"{target_id}.ad_blocker")
+            finally:
+                builtins.open = original_open
+                
             from . import ad_blocker_patch
             ad_blocker_patch.patch(ad_blocker_mod)
         except Exception as e:
@@ -107,10 +122,36 @@ def apply_patches():
             css_patch.patch(dock_web_view_mod)
             lifecycle_patch.patch(dock_web_view_mod)
             context_menu_patch.patch(add_fields_mod, dock_web_view_mod)
+            
+            # Register close_all_dock_widget to shutdown/profile close hooks to delete WebEnginePage properly
+            if hasattr(dock_web_view_mod, "close_all_dock_widget"):
+                from aqt import gui_hooks
+                gui_hooks.profile_will_close.append(dock_web_view_mod.close_all_dock_widget)
+                gui_hooks.exiting.append(dock_web_view_mod.close_all_dock_widget)
+                companion_logger.log(f"[Terminator Companion] [{target_id}] Registered close_all_dock_widget to profile_will_close/exiting hooks.")
         except Exception as e:
             companion_logger.log(f"[Terminator Companion] [{target_id}] Webview/Lifecycle/Context Menu patch failed: {e}")
 
-    # 3. Apply AI-Hints optimization patch
+        # 3. Defer startup WebEngineView initialization to prevent thread block at startup
+        try:
+            add_menu_mod = importlib.import_module(f"{target_id}.add_menu")
+            if hasattr(add_menu_mod, "setup_chatGPTwidget"):
+                from aqt import gui_hooks
+                original_setup = add_menu_mod.setup_chatGPTwidget
+                
+                def deferred_setup_chatGPTwidget():
+                    companion_logger.log(f"[Terminator Companion] [{target_id}] Executing deferred setup_chatGPTwidget...")
+                    from aqt.qt import QTimer
+                    QTimer.singleShot(1000, original_setup)
+                
+                if original_setup in gui_hooks.main_window_did_init:
+                    gui_hooks.main_window_did_init.remove(original_setup)
+                    gui_hooks.main_window_did_init.append(deferred_setup_chatGPTwidget)
+                    companion_logger.log(f"[Terminator Companion] [{target_id}] Successfully deferred setup_chatGPTwidget on main_window_did_init.")
+        except Exception as e:
+            companion_logger.log(f"[Terminator Companion] [{target_id}] Deferring startup initialization failed: {e}")
+
+    # 4. Apply AI-Hints optimization patch
     apply_ai_hints_patch()
     try:
         from aqt.qt import QTimer
