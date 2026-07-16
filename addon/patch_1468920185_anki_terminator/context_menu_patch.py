@@ -46,6 +46,14 @@ JS_HTML_EXTRACTOR = r"""
             return s;
         }
 
+        // Helper to sanitize text-mode latex accents like \^ to math-mode \hat
+        function sanitizeLatex(s) {
+            if (!s) return s;
+            s = s.replace(/\\\^\{/g, '\\hat{');
+            s = s.replace(/\\\^([a-zA-Z0-9])/g, '\\hat{$1}');
+            return s;
+        }
+
         // Helper to extract LaTeX from various math elements
         function extractLatex(el) {
             if (el.tagName === 'ANKI-MATHJAX') {
@@ -177,7 +185,7 @@ JS_HTML_EXTRACTOR = r"""
             var val = node.nodeValue || "";
             var match = val.match(/data-(?:xpm-)?(?:latex|tex|formula|math)(?:\s*\\?u003d|\s*\\?=\s*|=)\s*(?:\\&quot;|&quot;|\\\"|\"|\\\'|\')([\s\S]*?)(?:\\&quot;|&quot;|\\\"|\"|\\\'|\')/);
             if (match) {
-                var latex = decodeGoogleComment(match[1]);
+                var latex = sanitizeLatex(decodeGoogleComment(match[1]));
                 
                 var parent = node.parentNode;
                 if (parent && parent !== container) {
@@ -222,7 +230,7 @@ JS_HTML_EXTRACTOR = r"""
         var mathElements = Array.from(container.querySelectorAll(mathSelectors));
         mathElements.forEach(function(el) {
             if (container.contains(el)) {
-                var latex = extractLatex(el);
+                var latex = sanitizeLatex(extractLatex(el));
                 if (latex) {
                     var isBlock = isDisplayMode(el);
                     var replacement = isBlock ? ("\\[" + latex + "\\]") : ("\\(" + latex + "\\)");
