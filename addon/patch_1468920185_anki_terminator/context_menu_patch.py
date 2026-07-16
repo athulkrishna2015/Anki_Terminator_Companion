@@ -326,6 +326,15 @@ JS_HTML_EXTRACTOR = r"""
 })();
 """
 
+def sanitize_latex_in_text(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    import re
+    # Convert text-mode circumflex accent \^ to math-mode \hat
+    text = re.sub(r'\\\^\{', r'\\hat{', text)
+    text = re.sub(r'\\\^([a-zA-Z0-9])', r'\\hat{\1}', text)
+    return text
+
 def on_add_to_new_card(webview):
     def callback(selected_html):
         if not selected_html:
@@ -333,6 +342,8 @@ def on_add_to_new_card(webview):
         
         if not selected_html or selected_html.strip() == "":
             return
+
+        selected_html = sanitize_latex_in_text(selected_html)
 
         from aqt import mw, dialogs
         
@@ -426,6 +437,7 @@ def patch(add_fields_mod, dock_web_view_mod=None):
                 companion_logger.log(f"[Context Menu] Selection is empty. No text sent to field '{field}'.")
                 return
                 
+            selected_html = sanitize_latex_in_text(selected_html)
             companion_logger.log(f"[Context Menu] Sending processed text to field '{field}': {repr(selected_html)}")
             # Call original note processing helper
             add_fields_mod.launch_bg_note_processing(note, field, selected_html)
