@@ -61,6 +61,9 @@ class CompanionLogger:
     def get_logs(self):
         return "\n".join(self.logs)
 
+    def get_recent_logs(self, count=200):
+        return "\n".join(self.logs[-count:])
+
     def clear(self):
         self.logs = []
         # Signal the background worker thread to clear the log file asynchronously
