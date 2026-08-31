@@ -60,6 +60,19 @@ This companion addon is designed to run seamlessly alongside the original **Anki
   - **Sleek Progress Bar**: A browser-style progress indicator at the top of the sidebar replaces intrusive loading overlays.
   - **Persistent View**: The current page remains visible while the next one loads for a smoother browsing experience.
 
+### 🪟 13. Popup Window Navigation Controls
+* **The Problem**: Links opened in new popup windows had no navigation controls — no back, forward, reload, or address bar.
+* **The Solution**: Injects the same navigation toolbar (back, forward, reload, home, address bar) into every popup window, matching the sidebar's style and search engine configuration.
+
+### ⚙️ 14. Non-Modal Config Dialog & Lazy Logs
+* **The Problem**: Opening the config dialog blocked all Anki interaction. The logs tab could freeze with large log files.
+* **The Solution**:
+  - Config dialog is now **non-modal** — use Anki freely while it's open.
+  - Logs tab **lazy-loads** only the last 200 lines on open.
+  - **Refresh** button for manual log reload.
+  - Auto-scroll only when you're already at the bottom.
+  - Monospace font and fixed-width for better readability.
+
 ### 🤖 11. Header AI Dropdown Selector (Fast Switching & Dynamic Favicon)
 * **The Problem**: Switching between different AI providers (ChatGPT, DeepSeek, Claude, Gemini, etc.) was slow and required clicking the button repeatedly to rotate through them one by one.
 * **The Solution**: 
@@ -89,21 +102,22 @@ The companion add-on introduces a dedicated settings dialog inside Anki's Add-on
    * **Send Multiple Fields to AI**: Toggles sending all non-empty fields instead of just the priority field (configurable in both companion config and original Terminator "Fields" tab).
    * **Thaw Duration after Query**: Configures the duration in seconds that Gemini stays Active before freezing back after clicking any prompt buttons.
 2. **Performance Logs**:
+   * Lazy-loads the last 200 lines on open for fast startup.
    * Displays thread-safe, real-time diagnostic and performance events from the companion.
-   * Includes handy buttons to **Copy Logs** to clipboard and **Clear Logs**.
+   * Includes **Refresh**, **Copy Logs**, and **Clear Logs** buttons.
+   * Auto-scrolls only when you're already at the bottom.
 3. **Support**:
    * Offers direct links and QR codes to support the creator (UPI, BTC, ETH, and Ko-fi links).
    * Includes a checkbox option: `"I have supported this addon (Hide automatic update welcome)"` to disable the welcome screen popping up after future updates.
 
 ---
 
-## Development & Local Installation
+## Documentation
 
-Please refer to [DEVELOPMENT.md](DEVELOPMENT.md) for details on project directory structure, local setup, manual testing, versioning, and building release packages.
-
----
-
-## Changelog
-
-Please see [CHANGELOG.md](CHANGELOG.md) for details on version history and updates.
+| Document | Description |
+|---|---|
+| [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Internal architecture, patch system, code details |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | All config keys, defaults, JSON structures, log format |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local setup, testing, versioning, building releases |
 

@@ -2,6 +2,28 @@
 
 All notable changes to the Anki Terminator Companion addon will be documented in this file.
 
+### August 31, 2026 (v1.8.0)
+- **Popup Window Navigation Controls**:
+  - Added back, forward, reload, home buttons and address bar to all popup windows opened from the sidebar.
+  - New `popup_nav_patch.py` monkey-patches `CustomWebEnginePage.createWindow` to inject a navigation toolbar.
+  - Address bar supports direct URL entry and keyword search, matching sidebar search engine configuration.
+  - URL bar auto-syncs with page navigation via `urlChanged` signal.
+- **Non-Modal Config Dialog**:
+  - Config dialog now uses `.show()` instead of `.exec()`, allowing Anki to be used freely while the settings window is open.
+  - Dialog reference stored on `mw._companion_config_dialog` to prevent garbage collection.
+  - Save button no longer auto-closes the dialog.
+- **Lazy Log Loading & Refresh**:
+  - Performance Logs tab now lazy-loads only the last 200 lines via `QTimer.singleShot(0, ...)` to prevent UI freeze on open.
+  - Added `get_recent_logs(count)` method to `CompanionLogger` for efficient tail loading.
+  - Added **Refresh** button for manual log reload at any time.
+  - `QPlainTextEdit` capped at 2000 blocks with `setMaximumBlockCount` to prevent memory growth.
+  - Auto-scroll only triggers when the scrollbar is already near the bottom, respecting manual scrolling.
+  - Monospace font and `NoWrap` line mode for better log readability.
+- **Documentation Overhaul**:
+  - Created `docs/` folder with `ARCHITECTURE.md`, `CONFIGURATION.md`, and `DEVELOPMENT.md`.
+  - Moved root `DEVELOPMENT.md` into `docs/` and expanded with full config key reference, log format details, and testing checklist.
+  - Updated `README.md` with new features (#13, #14) and documentation table.
+
 ### July 13, 2026 (v1.7.8)
 - **Startup Performance Optimization**:
   - Bypassed synchronous `easylist.txt` file reading and parsing during startup imports by mocking `builtins.open` during the target's `ad_blocker` module load.
