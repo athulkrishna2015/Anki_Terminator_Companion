@@ -119,9 +119,11 @@ def apply_patches():
             from . import css_patch
             from . import lifecycle_patch
             from . import context_menu_patch
+            from . import popup_nav_patch
             css_patch.patch(dock_web_view_mod)
             lifecycle_patch.patch(dock_web_view_mod)
             context_menu_patch.patch(add_fields_mod, dock_web_view_mod)
+            popup_nav_patch.patch(dock_web_view_mod)
             
             # Register close_all_dock_widget to shutdown/profile close hooks to delete WebEnginePage properly
             if hasattr(dock_web_view_mod, "close_all_dock_widget"):
