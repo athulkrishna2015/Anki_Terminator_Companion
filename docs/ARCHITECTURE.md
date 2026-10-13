@@ -91,12 +91,24 @@ This is the largest patch (~1080 lines). It hooks:
 | `SetPopupConfig.__init__` | Injects companion checkboxes into original config dialog |
 | `SetPopupConfig.save_config_fontfamiles` | Saves companion config values from original dialog |
 
-**Freeze/Thaw cycle:**
+**Freeze/Thaw cycle (two tiers):**
 1. After page load completes, a 5-second timer starts
 2. If the sidebar is not hovered and not responding, it captures a screenshot (`webview.grab()`)
 3. The screenshot is shown in a `QLabel` overlay, and `QWebEnginePage.LifecycleState.Frozen` is set
-4. On hover, the screenshot hides and lifecycle state returns to `Active`
-5. Response monitoring polls `document.body.innerText.length` — after 3 stable checks (6s), freezing resumes
+4. `schedule_deep_freeze()` arms a single-shot timer for `deep_freeze_seconds` (default 300s)
+5. If that timer elapses while still not hovered/responding, `deep_freeze()` navigates the page to `about:blank` and stores the URL in `sidebar._deep_frozen_url`, letting Chromium free the renderer heap
+6. On hover, `thaw_sidebar()` calls `cancel_deep_freeze()`, sets lifecycle state back to `Active`, then `restore_deep_frozen_page()` puts the URL back
+7. Response monitoring polls `document.body.innerText.length` — after 3 stable checks (6s), freezing resumes
+
+**Why two tiers:** `LifecycleState.Frozen` only *suspends* a page so it can resume instantly — it does not release memory. A long Gemini/ChatGPT conversation keeps its DOM and JS heap alive, so the renderer could sit on ~1 GiB while the sidebar looked frozen. Tier 1 preserves the instant-resume UX; tier 2 reclaims memory only after a genuinely long idle. The trade-off is that a deep-freeze thaw **reloads the page** and discards unsent composer text, which is why tier 1 fires first and short absences are unaffected.
+
+| Deep-freeze helper | Role |
+|---|---|
+| `_deep_freeze_seconds()` | Reads `deep_freeze_seconds`, clamped to ≥0; falls back to 300 on any error |
+| `schedule_deep_freeze(sidebar)` | Cancels any prior timer, then arms a new single-shot `QTimer` parented to the sidebar |
+| `cancel_deep_freeze(sidebar)` | Stops and deletes the pending timer (called first in `thaw_sidebar`, before the early return) |
+| `deep_freeze(sidebar)` | Unloads to `about:blank`; no-ops if hovered, responding, already blank, or the URL is invalid. Stores the URL only *after* `setUrl` succeeds, so a failed navigation can't leave a stale URL that reloads on every thaw |
+| `restore_deep_frozen_page(sidebar)` | Restores the remembered URL and clears it; safe to call twice |
 
 **Response monitoring:**
 - Triggered by `runJavaScript` calls containing `replaceValue` or `execCommand` (prompt submissions)
@@ -192,3 +204,21 @@ The orchestrator tries to import modules from two known addon IDs:
 | `1448033349` | Anki Terminator V2 (alternate build) |
 
 Only detected addons are patched. If neither is found, a log message is emitted and the companion becomes a no-op.
+
+---
+
+## Anki Version Compatibility
+
+The companion targets the **currently installed** Anki, which on the dev machine is a rolling
+release build. Two Anki 26.x changes broke it (both fixed in v1.9.0) and are worth checking
+whenever `companion.log` reports `...patch failed:`:
+
+| Change | Symptom | Handling |
+|---|---|---|
+| `gui_hooks.exiting` removed | `AttributeError: module 'aqt.gui_hooks' has no attribute 'exiting'` | Register on whichever shutdown hooks exist (`profile_will_close`, plus `exiting` on older versions) |
+| `gui_hooks.*` are no longer plain lists | `TypeError: argument of type '_MainWindowDidInitHook' is not a container or iterable` | Hooks now expose only `append`/`remove`/`count`. To test membership, read the backing `_hooks` list and fall back to the hook object on older Anki |
+
+Note that `count()` on a 26.x hook is a **no-argument** method returning the number of
+registered hooks — it is *not* a membership test. Both failures were swallowed by broad
+`except` blocks and only surfaced in `companion.log`, so the addon appeared to start
+normally while parts of it were dead.

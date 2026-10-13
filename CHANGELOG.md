@@ -11,6 +11,12 @@ All notable changes to the Anki Terminator Companion addon will be documented in
   - After a configurable idle period the companion now navigates the sidebar to `about:blank`, letting Chromium free that memory, and restores the original URL on the next thaw. Short absences are unaffected — the existing instant screenshot freeze still fires first.
   - New **"Deep Idle Memory Free"** setting in the config dialog (default 300s, `0` disables). Note that thawing after a deep idle reloads the page, and unsent composer text is discarded.
 - **CI**: added `.github/workflows/release.yml` — byte-compiles the package, builds the `.ankiaddon`, attaches it to the GitHub release, and uploads it to AnkiWeb (listing 542586361). See `AGENTS.md`.
+- **Documentation**:
+  - Added `AGENTS.md` — release/CI trigger table, the AnkiWeb listing constants (and why `addon-id` must stay set), credential setup, and the Anki 26.x `gui_hooks` API change.
+  - `docs/CONFIGURATION.md` — documented `deep_freeze_seconds` and added a "Deep idle reclamation" section covering the two-tier freeze and its trade-offs.
+  - `docs/ARCHITECTURE.md` — documented the deep-idle helpers and the two-tier freeze/thaw cycle.
+  - `docs/DEVELOPMENT.md` — replaced the manual local-build release flow with the CI flow; added the CI dry-run rehearsal step.
+  - Added `deep_freeze_seconds` to the shipped `config.json` defaults for discoverability. Behaviour is unchanged — the code already fell back to 300 when the key was absent.
 
 ### August 31, 2026 (v1.8.0)
 - **Popup Window Navigation Controls**:

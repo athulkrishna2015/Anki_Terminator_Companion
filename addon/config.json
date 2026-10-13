@@ -15,5 +15,6 @@
     "search_engine": "Google",
     "custom_search_url": "https://www.google.com/search?q=",
     "thaw_duration_seconds": 30,
+    "deep_freeze_seconds": 300,
     "send_multiple_fields": false
 }

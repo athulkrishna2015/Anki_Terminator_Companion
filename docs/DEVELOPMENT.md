@@ -8,10 +8,13 @@ Local setup, testing, versioning, and building release packages.
 
 ```
 Anki_Terminator_Companion/ (Repo Root)
-├── README.md                 # User-facing overview
+├── README.md                 # User-facing overview (also the AnkiWeb listing description)
 ├── CHANGELOG.md              # Version history
+├── AGENTS.md                 # Release/CI + AnkiWeb listing + credential reference
 ├── bump.py                   # SemVer version bump utility
 ├── make_ankiaddon.py         # Packaging script → .ankiaddon
+├── .github/workflows/
+│   └── release.yml           # CI: check → build → GitHub release → AnkiWeb upload
 ├── docs/
 │   ├── ARCHITECTURE.md       # Internal architecture & patch details
 │   ├── CONFIGURATION.md      # Config keys, defaults, JSON reference
@@ -80,6 +83,8 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Anki2\addons21\Anki_Terminator_C
 - [ ] AI dropdown switches between providers
 - [ ] Sidebar freezes after 5s idle (check CPU drops to 0%)
 - [ ] Hovering unfreezes sidebar (screenshot disappears)
+- [ ] After ~5 min frozen, `companion.log` shows `Deep idle: cleared page (...)` and renderer memory drops
+- [ ] Hovering after a deep freeze restores the page and logs `Restored page after deep freeze`
 - [ ] Popup windows show navigation controls
 - [ ] Config dialog opens non-modal (Anki usable while open)
 - [ ] Logs tab loads quickly and updates live
@@ -95,20 +100,24 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Anki2\addons21\Anki_Terminator_C
 ### Bump Version
 
 ```shell
-# Auto-bump patch (1.8.0 → 1.8.1)
+# Auto-bump patch (1.9.0 → 1.9.1)
 python bump.py
 
-# Bump minor (1.8.0 → 1.9.0)
+# Bump minor (1.9.0 → 1.10.0)
 python bump.py minor
 
-# Bump major (1.8.0 → 2.0)
+# Bump major (1.9.0 → 2.0.0)
 python bump.py major
 
 # Set explicit version
-python bump.py 1.8.0
+python bump.py 1.9.1
 ```
 
 Updates both `addon/manifest.json` and `addon/VERSION`.
+
+> **Note:** a minor bump drops the patch component and writes `1.10`, not `1.10.0`. If you
+> want the full three-part form (which is what release tags use), run
+> `python make_ankiaddon.py 1.10.0` once — it re-syncs both files via `sync_version()`.
 
 ### Build .ankiaddon
 
@@ -117,12 +126,12 @@ Updates both `addon/manifest.json` and `addon/VERSION`.
 python make_ankiaddon.py
 
 # Explicit version
-python make_ankiaddon.py 1.8.0
+python make_ankiaddon.py 1.9.0
 ```
 
 Outputs a timestamped `.ankiaddon` file:
 ```
-Anki_Terminator_Companion_v1.8.0_202608312014.ankiaddon
+Anki_Terminator_Companion_v1.9.0_202608312014.ankiaddon
 ```
 
 The build:
@@ -133,11 +142,37 @@ The build:
 
 ### Release Flow
 
+**Do not build or upload the `.ankiaddon` by hand.** CI does both. The trigger is
+publishing a GitHub release — creating a *draft* deliberately runs nothing.
+
 1. Make changes and test locally
-2. `python make_ankiaddon.py 1.8.0` — builds the .ankiaddon
-3. `git add -A && git commit -m "Release vX.Y.Z: ..."`
-4. `git push`
-5. `gh release create vX.Y.Z --title "..." --notes "..." *.ankiaddon`
+2. `python bump.py minor` (or `patch`) — updates `addon/VERSION` + `addon/manifest.json`
+3. Update `CHANGELOG.md`, and `README.md` if any user-facing setting changed
+   (`README.md` is the AnkiWeb listing description)
+4. `git add -A && git commit -m "Release vX.Y.Z: ..."`
+5. `git push origin master && git tag vX.Y.Z && git push origin vX.Y.Z`
+6. `gh release create vX.Y.Z --title "..." --notes "..."` — **not** `--draft`
+7. `gh run watch` to watch the build + AnkiWeb upload
+
+The workflow byte-compiles `addon/`, builds the package, attaches it to the release,
+and uploads to AnkiWeb listing **542586361**. See `AGENTS.md` for the full trigger
+table, listing constants, and the manual `workflow_dispatch` / `dry_run` options.
+
+A local `python make_ankiaddon.py` is still useful for inspecting the artifact, but
+its output is gitignored and never published.
+
+### CI Rehearsal
+
+Before cutting a release you can validate the whole pipeline without touching GitHub
+releases or AnkiWeb:
+
+```shell
+gh workflow run release.yml --ref master -f tag=v1.9.0 -f dry_run=true
+gh run watch
+```
+
+This runs the syntax check, the build and the AnkiWeb description-size check, and
+**skips** the release attach and the AnkiWeb upload.
 
 ---
 
@@ -149,3 +184,9 @@ The build:
 - Logging uses `companion_logger.log(...)` with component prefix tags like `[Lifecycle Patch]`
 - GUI timers use `QTimer.singleShot(ms, callback)` for deferred operations
 - All Qt imports go through `from aqt.qt import *` for PyQt5/6 compatibility
+- **Check `companion.log` after every change.** The addon swallows exceptions broadly and reports
+  them only there, so a patch can die silently while startup still appears to succeed.
+- **Guard `gui_hooks` usage.** On Anki 26.x hooks are `_aqt.hooks.*` objects, not lists — `in`,
+  `len()` and iteration all raise `TypeError`. See the compatibility table in `ARCHITECTURE.md`.
+- **Clean up deep-freeze state** via `cancel_deep_freeze()` / `restore_deep_frozen_page()` rather
+  than touching the sidebar's `_deep_freeze_timer` / `_deep_frozen_url` directly.

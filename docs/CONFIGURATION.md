@@ -26,6 +26,7 @@ This file ships with the addon and provides initial values for fresh installs.
     "search_engine": "Google",
     "custom_search_url": "https://www.google.com/search?q=",
     "thaw_duration_seconds": 30,
+    "deep_freeze_seconds": 300,
     "send_multiple_fields": false
 }
 ```
@@ -74,7 +75,27 @@ This file ships with the addon and provides initial values for fresh installs.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `thaw_duration_seconds` | `int` | `30` | How long (in seconds) the sidebar stays in Active (unfrozen) state after clicking an AI prompt button. Range: 5–300. |
+| `deep_freeze_seconds` | `int` | `300` | How long the sidebar stays frozen before its page is **unloaded entirely** (navigated to `about:blank`) so Chromium can release the renderer's memory. `0` disables the behaviour and keeps the previous snapshot-only freeze. Range: 0–3600. Values that are negative, non-numeric, or absent all fall back to `300`. See [Deep idle reclamation](#deep-idle-reclamation) below for the trade-offs. |
 | `send_multiple_fields` | `bool` | `false` | When enabled, concatenates all non-empty card fields as `FieldName: FieldValue` instead of sending only the priority field. |
+
+### Deep idle reclamation
+
+`enable_lifecycle_freezing` implements a **two-tier** freeze, because
+`QWebEnginePage.LifecycleState.Frozen` only *suspends* a page — it does not release
+the renderer's heap. A long Gemini/ChatGPT conversation keeps its DOM and JS heap
+alive, so the sidebar could sit on roughly **1 GiB** of `QtWebEngineProcess` memory
+while appearing frozen.
+
+| Tier | Trigger | What happens | Cost on return |
+|---|---|---|---|
+| Instant freeze | 5s after page load, not hovered, not responding | Screenshot (`webview.grab()`) shown in a `QLabel` overlay; lifecycle state → `Frozen` | None — instant |
+| Deep idle | `deep_freeze_seconds` after the instant freeze | Page navigated to `about:blank`; the URL is remembered in `sidebar._deep_frozen_url` | **Page reload**, and unsent composer text is lost |
+
+The deep timer is cancelled by `cancel_deep_freeze()` on any thaw, and `deep_freeze()`
+refuses to fire while the sidebar is hovered or an AI response is still streaming, so
+an active conversation is never interrupted. Because the first tier still runs
+immediately, short absences are completely unaffected — you only pay a reload after a
+genuinely long idle.
 
 ---
 
@@ -84,7 +105,7 @@ Managed by Anki's addon manager. The companion reads/writes specific keys.
 
 ```json
 {
-    "last_seen_version": "1.8.0",
+    "last_seen_version": "1.9.0",
     "supporter_opt_out": false,
     "config": { ... },
     "disabled": false,
@@ -111,8 +132,8 @@ Managed by Anki's addon manager. The companion reads/writes specific keys.
     "name": "Anki Terminator Companion",
     "package": "Anki_Terminator_Companion",
     "desc": "Companion addon for Anki Terminator V2...",
-    "version": "1.8.0",
-    "human_version": "1.8.0",
+    "version": "1.9.0",
+    "human_version": "1.9.0",
     "min_point_version": 1,
     "max_point_version": 250902
 }
@@ -128,7 +149,7 @@ Managed by Anki's addon manager. The companion reads/writes specific keys.
 
 ## VERSION File
 
-Single-line text file containing the current SemVer version string (e.g., `1.8.0`). Used by:
+Single-line text file containing the current SemVer version string (e.g., `1.9.0`). Used by:
 - `bump.py` — reads and writes during version bumps
 - `make_ankiaddon.py` — reads during build
 - `check_support_on_update()` — compares against `meta.json:last_seen_version`
@@ -147,7 +168,7 @@ Each line in `companion.log` follows:
 
 | Component | Source File | What It Logs |
 |---|---|---|
-| `Lifecycle Patch` | `lifecycle_patch.py` | Freeze/thaw events, snapshot captures, nav injection, progress bar state, load events |
+| `Lifecycle Patch` | `lifecycle_patch.py` | Freeze/thaw events, snapshot captures, deep idle clears/restores, nav injection, progress bar state, load events |
 | `AdBlocker Patch` | `ad_blocker_patch.py` | Rule optimization stats, blocked ad URLs |
 | `CSS Patch` | `css_patch.py` | Gemini CSS injection |
 | `Context Menu Patch` | `context_menu_patch.py` | Right-click actions, HTML extraction, cloze censoring |
@@ -168,6 +189,8 @@ Each line in `companion.log` follows:
 [19:58:43.530] [Lifecycle Patch] Injected Nav buttons and Config button into QToolBar header.
 [19:58:52.645] [Lifecycle Patch] webview.loadStarted triggered.
 [20:00:07.065] [Popup Nav Patch] Injected navigation controls into popup window.
+[20:14:31.802] [Lifecycle Patch] Deep idle: cleared page (https://gemini.google.com/app) to free renderer memory.
+[20:19:04.117] [Lifecycle Patch] Restored page after deep freeze: https://gemini.google.com/app
 ```
 
 ---
