@@ -128,9 +128,21 @@ def apply_patches():
             # Register close_all_dock_widget to shutdown/profile close hooks to delete WebEnginePage properly
             if hasattr(dock_web_view_mod, "close_all_dock_widget"):
                 from aqt import gui_hooks
-                gui_hooks.profile_will_close.append(dock_web_view_mod.close_all_dock_widget)
-                gui_hooks.exiting.append(dock_web_view_mod.close_all_dock_widget)
-                companion_logger.log(f"[Terminator Companion] [{target_id}] Registered close_all_dock_widget to profile_will_close/exiting hooks.")
+                # Anki 26.x renamed/removed `gui_hooks.exiting`; register on whichever
+                # shutdown hooks this Anki version actually exposes.
+                registered = []
+                for hook_name in ("profile_will_close", "exiting"):
+                    hook = getattr(gui_hooks, hook_name, None)
+                    if hook is None or not hasattr(hook, "append"):
+                        continue
+                    if hook_name in registered:
+                        continue
+                    hook.append(dock_web_view_mod.close_all_dock_widget)
+                    registered.append(hook_name)
+                companion_logger.log(
+                    f"[Terminator Companion] [{target_id}] Registered close_all_dock_widget "
+                    f"to {'/'.join(registered) if registered else 'no'} hooks."
+                )
         except Exception as e:
             companion_logger.log(f"[Terminator Companion] [{target_id}] Webview/Lifecycle/Context Menu patch failed: {e}")
 
@@ -146,10 +158,17 @@ def apply_patches():
                     from aqt.qt import QTimer
                     QTimer.singleShot(1000, original_setup)
                 
-                if original_setup in gui_hooks.main_window_did_init:
-                    gui_hooks.main_window_did_init.remove(original_setup)
-                    gui_hooks.main_window_did_init.append(deferred_setup_chatGPTwidget)
+                # Anki 26.x gui_hooks are custom `_aqt.hooks.*` objects, not plain lists,
+                # so `in` / iteration raise TypeError. Fall back to the backing `_hooks`
+                # list when present; older Anki exposes the list directly.
+                init_hook = gui_hooks.main_window_did_init
+                hook_list = getattr(init_hook, "_hooks", init_hook)
+                if original_setup in hook_list:
+                    init_hook.remove(original_setup)
+                    init_hook.append(deferred_setup_chatGPTwidget)
                     companion_logger.log(f"[Terminator Companion] [{target_id}] Successfully deferred setup_chatGPTwidget on main_window_did_init.")
+                else:
+                    companion_logger.log(f"[Terminator Companion] [{target_id}] setup_chatGPTwidget not found on main_window_did_init; leaving registration untouched.")
         except Exception as e:
             companion_logger.log(f"[Terminator Companion] [{target_id}] Deferring startup initialization failed: {e}")
 

@@ -776,6 +776,89 @@ def patch(dock_web_view_mod):
             companion_logger.log("[Lifecycle Patch] Progress finished (100%). Hiding progress bar.")
             sidebar.progress_bar.hide()
 
+    # Deep-idle helpers.
+    # QWebEnginePage.LifecycleState.Frozen only suspends the page so it can resume
+    # quickly -- it does NOT release the renderer heap. A long chat session keeps
+    # its DOM/JS heap alive, which is why the renderer can sit on ~1 GiB while the
+    # sidebar looks "frozen". After a longer idle we additionally drop the page to
+    # about:blank so Chromium can free that memory, and restore the URL on thaw.
+    DEEP_FREEZE_KEY = "deep_freeze_seconds"
+
+    def _deep_freeze_seconds():
+        try:
+            cfg = mw.addonManager.getConfig(__name__.split(".")[0]) or {}
+            return max(0, int(cfg.get(DEEP_FREEZE_KEY, 300)))
+        except Exception:
+            return 300
+
+    def _sidebar_page(sidebar):
+        page = getattr(sidebar, "webpage", None)
+        if page is None:
+            try:
+                page = sidebar.webview.page()
+            except Exception:
+                page = None
+        return page
+
+    def cancel_deep_freeze(sidebar):
+        timer = getattr(sidebar, "_deep_freeze_timer", None)
+        if timer is not None:
+            try:
+                timer.stop()
+                timer.deleteLater()
+            except Exception:
+                pass
+            sidebar._deep_freeze_timer = None
+
+    def deep_freeze(sidebar):
+        """Unload the page after a long idle so the renderer frees its heap."""
+        try:
+            if getattr(sidebar, "is_hovered", False) or getattr(sidebar, "is_responding", False):
+                return
+            page = _sidebar_page(sidebar)
+            if page is None:
+                return
+            url = page.url()
+            if not url.isValid() or url.toString() in ("about:blank", ""):
+                return
+            # Only remember the URL once the page actually navigated to about:blank,
+            # so a failed setUrl can't leave a stale URL that reloads on every thaw.
+            page.setUrl(QUrl("about:blank"))
+            sidebar._deep_frozen_url = url
+            companion_logger.log(
+                f"[Lifecycle Patch] Deep idle: cleared page ({url.toString()}) to free renderer memory."
+            )
+        except Exception as e:
+            companion_logger.log(f"[Lifecycle Patch] Deep freeze failed: {e}")
+
+    def schedule_deep_freeze(sidebar):
+        cancel_deep_freeze(sidebar)
+        seconds = _deep_freeze_seconds()
+        if seconds <= 0:
+            return
+        try:
+            timer = QTimer(sidebar)
+            timer.setSingleShot(True)
+            timer.timeout.connect(lambda: deep_freeze(sidebar))
+            timer.start(seconds * 1000)
+            sidebar._deep_freeze_timer = timer
+        except Exception as e:
+            companion_logger.log(f"[Lifecycle Patch] Could not schedule deep freeze: {e}")
+
+    def restore_deep_frozen_page(sidebar):
+        url = getattr(sidebar, "_deep_frozen_url", None)
+        if url is None:
+            return
+        sidebar._deep_frozen_url = None
+        page = _sidebar_page(sidebar)
+        if page is None:
+            return
+        try:
+            page.setUrl(url)
+            companion_logger.log(f"[Lifecycle Patch] Restored page after deep freeze: {url.toString()}")
+        except Exception as e:
+            companion_logger.log(f"[Lifecycle Patch] Could not restore deep frozen page: {e}")
+
     # Helper functions to freeze and thaw using QStackedWidget
     def freeze_sidebar(sidebar):
         try:
@@ -819,6 +902,8 @@ def patch(dock_web_view_mod):
                             sidebar.stop_timer.stop()
                         except Exception:
                             pass
+                    # Arm the deep-idle page clear for this freeze.
+                    schedule_deep_freeze(sidebar)
                 except Exception:
                     pass
 
@@ -828,6 +913,8 @@ def patch(dock_web_view_mod):
 
     def thaw_sidebar(sidebar):
         try:
+            # Waking up: drop any pending deep-idle page clear.
+            cancel_deep_freeze(sidebar)
             if not sidebar.snapshot_label.isVisible():
                 return
                 
@@ -837,6 +924,9 @@ def patch(dock_web_view_mod):
                 except Exception:
                     pass
             
+            # If the deep-idle path dropped the page, bring it back before unhiding.
+            restore_deep_frozen_page(sidebar)
+
             def complete_thaw():
                 try:
                     if not getattr(sidebar, "is_hovered", False) and not sidebar.is_responding:

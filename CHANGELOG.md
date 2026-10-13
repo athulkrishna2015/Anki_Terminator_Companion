@@ -2,6 +2,16 @@
 
 All notable changes to the Anki Terminator Companion addon will be documented in this file.
 
+### October 13, 2026 (v1.9.0)
+- **Anki 26.x Compatibility (bug fix)**:
+  - `gui_hooks.exiting` was removed in Anki 26.x. The companion registered `close_all_dock_widget` on it unconditionally, which raised `AttributeError` on every launch and aborted the rest of the patch block. It now registers on whichever shutdown hooks the running Anki actually exposes (`profile_will_close`, and `exiting` on older versions).
+  - Anki 26.x `gui_hooks` are custom `_aqt.hooks.*` objects rather than plain lists, so the membership test used to defer `setup_chatGPTwidget` raised `TypeError`. **This silently disabled the startup deferral**, so the Terminator webview was built synchronously during `main_window_did_init` on every launch — the "prevent thread block at startup" optimization had been dead since the Anki 26 upgrade. The check now reads the hook's backing `_hooks` list, falling back to the hook object on older Anki.
+- **Deep Idle Memory Free (new setting)**:
+  - `LifecycleState.Frozen` only suspends a page so it can resume quickly; it does **not** release the renderer's heap. A long Gemini/ChatGPT conversation kept its DOM and JS heap alive, so the sidebar could sit on ~1 GiB of `QtWebEngineProcess` memory while appearing frozen.
+  - After a configurable idle period the companion now navigates the sidebar to `about:blank`, letting Chromium free that memory, and restores the original URL on the next thaw. Short absences are unaffected — the existing instant screenshot freeze still fires first.
+  - New **"Deep Idle Memory Free"** setting in the config dialog (default 300s, `0` disables). Note that thawing after a deep idle reloads the page, and unsent composer text is discarded.
+- **CI**: added `.github/workflows/release.yml` — byte-compiles the package, builds the `.ankiaddon`, attaches it to the GitHub release, and uploads it to AnkiWeb (listing 542586361). See `AGENTS.md`.
+
 ### August 31, 2026 (v1.8.0)
 - **Popup Window Navigation Controls**:
   - Added back, forward, reload, home buttons and address bar to all popup windows opened from the sidebar.

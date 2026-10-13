@@ -124,6 +124,18 @@ class GeneralTab(QWidget):
         self.thaw_sb.setToolTip("The duration Gemini stays Active before freezing back after you press any AI button.")
         
         form_layout.addRow("Thaw Duration after Query:", self.thaw_sb)
+        
+        self.deep_freeze_sb = QSpinBox(self)
+        self.deep_freeze_sb.setRange(0, 3600)
+        self.deep_freeze_sb.setSingleStep(60)
+        self.deep_freeze_sb.setSuffix(" seconds")
+        self.deep_freeze_sb.setValue(self.config.get("deep_freeze_seconds", 300))
+        self.deep_freeze_sb.setToolTip(
+            "After the sidebar has been frozen this long, unload the page entirely so Chromium "
+            "can release the renderer's memory. Thawing reloads the page. Set to 0 to disable."
+        )
+        form_layout.addRow("Deep Idle Memory Free:", self.deep_freeze_sb)
+        
         layout.addLayout(form_layout)
         layout.addStretch()
 
@@ -153,5 +165,6 @@ class GeneralTab(QWidget):
             "search_engine": self.search_engine_combo.currentText(),
             "custom_search_url": self.custom_search_edit.text(),
             "thaw_duration_seconds": self.thaw_sb.value(),
+            "deep_freeze_seconds": self.deep_freeze_sb.value(),
             "send_multiple_fields": self.send_multiple_chk.isChecked()
         }

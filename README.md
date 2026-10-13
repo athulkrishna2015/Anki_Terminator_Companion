@@ -73,6 +73,14 @@ This companion addon is designed to run seamlessly alongside the original **Anki
   - Auto-scroll only when you're already at the bottom.
   - Monospace font and fixed-width for better readability.
 
+### 🧠 15. Deep Idle Memory Reclamation
+* **The Problem**: Freezing the sidebar with `LifecycleState.Frozen` only *suspends* the page so it can resume instantly — it does **not** release memory. A long Gemini/ChatGPT conversation keeps its DOM and JavaScript heap alive, so the renderer process can sit on roughly **1 GB** of RAM even while the sidebar looks frozen. On a memory-constrained machine that pushes everything else into swap and leaves the whole system sluggish.
+* **The Solution**:
+  - After a configurable idle period (**Deep Idle Memory Free**, default 5 minutes) the companion navigates the sidebar to `about:blank`, which lets Chromium tear down the page and free the renderer's heap.
+  - The original URL is remembered and restored the moment you return, and the timer is cancelled on any hover or in-flight AI response so an active conversation is never interrupted.
+  - Short absences are completely unaffected: the instant screenshot freeze still fires first, so you only pay a page reload after a genuinely long idle.
+  - Set the value to `0` in the config dialog to disable and keep the previous behaviour.
+
 ### 🤖 11. Header AI Dropdown Selector (Fast Switching & Dynamic Favicon)
 * **The Problem**: Switching between different AI providers (ChatGPT, DeepSeek, Claude, Gemini, etc.) was slow and required clicking the button repeatedly to rotate through them one by one.
 * **The Solution**: 
@@ -101,6 +109,7 @@ The companion add-on introduces a dedicated settings dialog inside Anki's Add-on
    * **Enable AI-Hints Context Menu Preservation**: Toggles safety check when appending right-click selections.
    * **Send Multiple Fields to AI**: Toggles sending all non-empty fields instead of just the priority field (configurable in both companion config and original Terminator "Fields" tab).
    * **Thaw Duration after Query**: Configures the duration in seconds that Gemini stays Active before freezing back after clicking any prompt buttons.
+   * **Deep Idle Memory Free**: Configures how long the sidebar stays frozen before its page is unloaded entirely, letting Chromium release the renderer's memory. Freeing a long Gemini/ChatGPT conversation can reclaim roughly 1 GB of `QtWebEngineProcess` memory on a 7 GB machine. Default `300` seconds; set `0` to disable. Note that thawing after a deep idle reloads the page, so unsent composer text is discarded.
 2. **Performance Logs**:
    * Lazy-loads the last 200 lines on open for fast startup.
    * Displays thread-safe, real-time diagnostic and performance events from the companion.
