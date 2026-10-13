@@ -2,6 +2,14 @@
 
 All notable changes to the Anki Terminator Companion addon will be documented in this file.
 
+### October 13, 2026 (v1.9.1)
+- **Black Sidebar After Deep-Idle Unload (bug fix)**:
+  - Deep idle navigated the sidebar page to `about:blank` to free renderer memory, which fires the sidebar's own `loadStarted`/`loadFinished` handlers. Two of them sabotaged the frozen screenshot: `on_initial_load` hides `snapshot_label` after 150ms (exposing the blank page), then re-schedules `freeze_sidebar` 5s later, which grabs the now-empty page and **permanently overwrites the screenshot with a black frame** — so the sidebar stayed black even after thawing.
+  - `deep_freeze()` now flags its own navigation (`sidebar._companion_deep_unload`). `on_load_started` returns immediately, keeping the snapshot and progress bar as-is; `on_initial_load` consumes the flag and returns without hiding the snapshot or re-scheduling a freeze.
+  - `restore_deep_frozen_page()` clears the flag before navigating, so a deep unload whose `loadFinished` never arrived cannot leave the flag set and suppress the next real page load.
+  - Thawing is unchanged: the restored navigation runs the normal handlers, so the snapshot hides and the sidebar refreezes after 5s.
+  - **Affects only users who left `deep_freeze_seconds` at its default (300s).** Set it to `0` in the config dialog to disable deep idle reclamation entirely.
+
 ### October 13, 2026 (v1.9.0)
 - **Anki 26.x Compatibility (bug fix)**:
   - `gui_hooks.exiting` was removed in Anki 26.x. The companion registered `close_all_dock_widget` on it unconditionally, which raised `AttributeError` on every launch and aborted the rest of the patch block. It now registers on whichever shutdown hooks the running Anki actually exposes (`profile_will_close`, and `exiting` on older versions).
