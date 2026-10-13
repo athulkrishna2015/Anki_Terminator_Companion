@@ -329,6 +329,12 @@ def patch(dock_web_view_mod):
         
         def on_load_started():
             companion_logger.log("[Lifecycle Patch] webview.loadStarted triggered.")
+            if getattr(self, "_companion_deep_unload", False):
+                # Our own about:blank navigation for deep-idle reclamation. Leave the
+                # frozen snapshot and the progress bar exactly as they are, otherwise
+                # the sidebar flashes black while the page is being unloaded.
+                companion_logger.log("[Lifecycle Patch] Deep-idle unload loadStarted; ignoring.")
+                return
             cfg = mw.addonManager.getConfig(__name__.split(".")[0]) or {}
             
             # Immediately try to kill original loading screen before it draws
@@ -419,6 +425,14 @@ def patch(dock_web_view_mod):
         # Hook the initial page load to freeze it after 5 seconds
         def on_initial_load(success):
             companion_logger.log(f"[Lifecycle Patch] CustomWebEnginePage.loadFinished triggered! Success state: {success}")
+            if getattr(self, "_companion_deep_unload", False):
+                # Consume the flag: this was our about:blank deep-idle unload, not a
+                # real page load. Keep the frozen screenshot visible and do NOT
+                # re-schedule freeze_sidebar -- that would grab the now-blank page and
+                # permanently replace the screenshot with a black frame.
+                self._companion_deep_unload = False
+                companion_logger.log("[Lifecycle Patch] Deep-idle unload finished; keeping frozen snapshot visible.")
+                return
             if hasattr(self, "snapshot_label"):
                 # Delay hiding to ensure page is actually painted
                 QTimer.singleShot(150, self.snapshot_label.hide)
@@ -823,6 +837,10 @@ def patch(dock_web_view_mod):
                 return
             # Only remember the URL once the page actually navigated to about:blank,
             # so a failed setUrl can't leave a stale URL that reloads on every thaw.
+            # Flag the navigation first: the sidebar's own loadStarted/loadFinished
+            # handlers hide the snapshot and re-schedule a freeze, which would
+            # expose the blank page and then overwrite the screenshot with black.
+            sidebar._companion_deep_unload = True
             page.setUrl(QUrl("about:blank"))
             sidebar._deep_frozen_url = url
             companion_logger.log(
@@ -854,6 +872,10 @@ def patch(dock_web_view_mod):
         if page is None:
             return
         try:
+            # Clear any stale suppression flag first: if the about:blank load never
+            # reported loadFinished (page already blank, navigation cancelled, ...),
+            # leaving it set would make the NEXT real page load get ignored.
+            sidebar._companion_deep_unload = False
             page.setUrl(url)
             companion_logger.log(f"[Lifecycle Patch] Restored page after deep freeze: {url.toString()}")
         except Exception as e:
