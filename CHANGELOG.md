@@ -2,7 +2,7 @@
 
 All notable changes to the Anki Terminator Companion addon will be documented in this file.
 
-### Unreleased
+### October 15, 2026 (v1.9.2)
 - **Sidebar memory/CPU leaks (bug fixes)**:
   - **Response monitor re-entrancy**: every prompt submission runs JS containing `replaceValue`/`execCommand`, and each one started *another* 2s polling chain on the same sidebar. Those chains shared `stable_checks` but each ran its own `document.body.innerText.length` round-trip to the renderer every 2 seconds for as long as the response stayed unstable, so N submissions meant N concurrent pollers. `start_response_monitoring` now keeps a single chain per sidebar (`_companion_monitor_running`) and resets only the stability counter when a new prompt arrives mid-response.
   - **Popup navigation accumulation**: the target add-on reuses one `mw.AnkiTerminator_new_dialog` for every popup and only clears it when the sidebar closes, so each popup stacked another four buttons, a line edit and their signal closures onto the same layout for the lifetime of the sidebar. The previous bar is now located by object name and removed before the new one is inserted.
@@ -13,6 +13,9 @@ All notable changes to the Anki Terminator Companion addon will be documented in
   - **Users must install and upgrade manually** — download the `.ankiaddon` from the Releases page, then **Tools → Add-ons → Install from file…**. Anki does not auto-update manually installed add-ons.
   - Documentation: added an **Installation** section to `README.md`; rewrote the release/distribution sections of `AGENTS.md` (the old listing constants are kept only as a historical record, with a warning not to reintroduce them into the workflow); updated the release flow and CI rehearsal steps in `docs/DEVELOPMENT.md`.
   - Docs: corrected the development-symlink path — the installed folder is `Anki_Terminator_Performance_Companion`, not `Anki_Terminator_Companion`.
+- **Packaging (first GitHub-only release)**:
+  - `addon/meta.json` is no longer included in the `.ankiaddon`. It is Anki's per-add-on meta store (`mw.addonManager.addonMeta()` reads and writes `<addon_dir>/meta.json`; it is *not* kept in `prefs21.db`), and Anki's installer never creates one — it is written lazily on first run. Shipping it meant every fresh install began with the build machine's `last_seen_version` already matching the current version, so the one-time support/welcome screen never appeared. Anki regenerates the file on first launch, and the welcome screen now appears correctly on both first install and each upgrade.
+  - Repo hygiene only, no runtime effect: stopped tracking `__pycache__/*.pyc` and run-time/tool state, and set `core.fileMode false` locally for the portable mount.
 
 ### October 13, 2026 (v1.9.1)
 - **Black Sidebar After Deep-Idle Unload (bug fix)**:
