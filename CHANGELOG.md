@@ -2,6 +2,18 @@
 
 All notable changes to the Anki Terminator Companion addon will be documented in this file.
 
+### Unreleased
+- **Sidebar memory/CPU leaks (bug fixes)**:
+  - **Response monitor re-entrancy**: every prompt submission runs JS containing `replaceValue`/`execCommand`, and each one started *another* 2s polling chain on the same sidebar. Those chains shared `stable_checks` but each ran its own `document.body.innerText.length` round-trip to the renderer every 2 seconds for as long as the response stayed unstable, so N submissions meant N concurrent pollers. `start_response_monitoring` now keeps a single chain per sidebar (`_companion_monitor_running`) and resets only the stability counter when a new prompt arrives mid-response.
+  - **Popup navigation accumulation**: the target add-on reuses one `mw.AnkiTerminator_new_dialog` for every popup and only clears it when the sidebar closes, so each popup stacked another four buttons, a line edit and their signal closures onto the same layout for the lifetime of the sidebar. The previous bar is now located by object name and removed before the new one is inserted.
+  - **Double-apply guards**: `lifecycle_patch`, `css_patch` and `popup_nav_patch` wrap `QWebEnginePage.runJavaScript`, `QClipboard.setText` and `createWindow`. Reapplying would wrap our own wrapper, doubling every dispatch and leaving the previous wrapper's closure chain alive, so each patch now marks the target module and skips if it has already run.
+- **Distribution change — removed from AnkiWeb** (issue #2):
+  - The AnkiWeb listing (`542586361`) has been taken down. This add-on is **no longer published to, or updated on, AnkiWeb**, and the release workflow no longer uploads to it. The `ANKIWEB_USERNAME` / `ANKIWEB_PASSWORD` Actions secrets are no longer read by the workflow.
+  - GitHub Releases is now the only distribution channel: CI still byte-compiles, builds and attaches the `.ankiaddon` to the GitHub release.
+  - **Users must install and upgrade manually** — download the `.ankiaddon` from the Releases page, then **Tools → Add-ons → Install from file…**. Anki does not auto-update manually installed add-ons.
+  - Documentation: added an **Installation** section to `README.md`; rewrote the release/distribution sections of `AGENTS.md` (the old listing constants are kept only as a historical record, with a warning not to reintroduce them into the workflow); updated the release flow and CI rehearsal steps in `docs/DEVELOPMENT.md`.
+  - Docs: corrected the development-symlink path — the installed folder is `Anki_Terminator_Performance_Companion`, not `Anki_Terminator_Companion`.
+
 ### October 13, 2026 (v1.9.1)
 - **Black Sidebar After Deep-Idle Unload (bug fix)**:
   - Deep idle navigated the sidebar page to `about:blank` to free renderer memory, which fires the sidebar's own `loadStarted`/`loadFinished` handlers. Two of them sabotaged the frozen screenshot: `on_initial_load` hides `snapshot_label` after 150ms (exposing the blank page), then re-schedules `freeze_sidebar` 5s later, which grabs the now-empty page and **permanently overwrites the screenshot with a black frame** — so the sidebar stayed black even after thawing.

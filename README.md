@@ -9,6 +9,27 @@ This companion addon is designed to run seamlessly alongside the original **Anki
 
 ---
 
+## Installation
+
+> **This add-on is no longer published on AnkiWeb.** The listing has been removed, so
+> there is nothing to install from inside Anki's built-in browser. Downloads now come
+> from GitHub Releases.
+
+**Requires [Anki Terminator V2 - ChatGPT DeepSeek Sidebar for Reviewer](https://ankiweb.net/shared/addons/1468920185)** (`1468920185`) to be installed first — this add-on patches it at runtime and does nothing on its own.
+
+1. Download the latest `.ankiaddon` from the
+   [Releases page](https://github.com/athulkrishna2015/Anki_Terminator_Companion/releases/latest).
+2. In Anki, go to **Tools → Add-ons → Install from file…** and pick the download.
+3. Restart Anki.
+4. Confirm it loaded via **Tools → Add-ons → Anki Terminator Companion → Config**.
+   Patches apply on startup, and any that fail are recorded in `companion.log`.
+
+**Upgrading** is the same three steps over the existing install. Anki does **not**
+auto-update manually installed add-ons, so re-download the `.ankiaddon` when a new
+version matters to you.
+
+---
+
 ## Key Features & Optimization Highlights
 
 ### ⚡ 1. Smart UI-Freezing with Active Hover Tracking (0% Idle CPU)

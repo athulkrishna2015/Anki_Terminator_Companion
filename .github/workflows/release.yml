@@ -6,22 +6,18 @@ name: Release
 # Publishing fires this workflow (no asset needed on the create call), which:
 #   1. syntax-checks every module in addon/ (fail fast: nothing broken ships),
 #   2. rebuilds the .ankiaddon from the tag (version forced to the tag),
-#   3. attaches it to the GitHub release (overwriting on re-runs),
-#   4. uploads the same file to AnkiWeb (addon 542586361) via
-#      athulkrishna2015/ankiweb-api@v1, preserving the listing's title,
-#      support page and single open-ended branch, and refreshing the listing
-#      description from README.md.
+#   3. attaches it to the GitHub release (overwriting on re-runs).
 #
-# NOTE: `addon-id` MUST stay set. The action creates a *brand new* listing when
-# it is empty, which would orphan the existing one (reviews, downloads, URL).
+# The AnkiWeb listing was removed (issue #2), so there is deliberately NO AnkiWeb
+# upload step and no ANKIWEB_* secrets here. GitHub Releases is the only
+# distribution channel. Do not re-add one without reversing that decision: the
+# upload action creates a brand-new listing when `addon-id` is empty, which would
+# resurrect the listing that was deliberately taken down.
 #
-# One-time setup (repo Settings → Secrets and variables → Actions → Secrets):
-#   - ANKIWEB_USERNAME  (AnkiWeb login email)
-#   - ANKIWEB_PASSWORD  (plain-password auth; interactive 2FA is unsupported)
 # To rebuild/republish an existing tag without cutting a new release:
 # Actions → Release → Run workflow → enter the tag (e.g. v1.9.0).
-# To rehearse the pipeline (check + build + description size check) without
-# touching the release or AnkiWeb: same dialog, tick `dry_run`.
+# To rehearse the pipeline (check + build) without touching the release:
+# same dialog, tick `dry_run`.
 
 on:
   release:
@@ -32,7 +28,7 @@ on:
         description: "Release tag to rebuild/republish (e.g. v1.9.0). With dry_run, a branch (e.g. master) is also accepted."
         required: true
       dry_run:
-        description: "Rehearse only: run the check and the build, skip the release + AnkiWeb uploads"
+        description: "Rehearse only: run the check and the build, skip the release attach"
         type: boolean
         default: false
 
@@ -85,7 +81,7 @@ jobs:
           fi
           if [ "$DRY_RUN" = "true" ]; then
             echo "dry_run=true" >> "$GITHUB_OUTPUT"
-            echo "Dry run: the release and AnkiWeb upload steps will be skipped."
+            echo "Dry run: the release attach step will be skipped."
           fi
 
       - name: Check out the ref
@@ -153,20 +149,6 @@ jobs:
           echo "ankiaddon=$file" >> "$GITHUB_OUTPUT"
           echo "Built $file ($(wc -c < "$file") bytes)"
 
-      - name: Check AnkiWeb description size
-        run: |
-          set -euo pipefail
-          # AnkiWeb rejects descriptions over 65535 bytes -- and rejects them
-          # *silently from the add-on's point of view*: the upload fails and the
-          # listing keeps its previous text, so it looks like the README was
-          # dropped. Fail loudly here instead of shipping a stale description.
-          size=$(wc -c < README.md)
-          echo "README.md: $size bytes (AnkiWeb limit 65535)"
-          if [ "$size" -gt 65535 ]; then
-            echo "::error::README.md is $size bytes; AnkiWeb rejects descriptions over 65535." >&2
-            exit 1
-          fi
-
       - name: Attach to GitHub release
         if: steps.ref.outputs.dry_run != 'true'
         env:
@@ -178,17 +160,3 @@ jobs:
             gh release create "$TAG" --title "Anki Terminator Companion ${{ steps.version.outputs.version }}" --generate-notes
           fi
           gh release upload "$TAG" "${{ steps.build.outputs.ankiaddon }}" --clobber
-
-      - name: Upload to AnkiWeb
-        if: steps.ref.outputs.dry_run != 'true'
-        uses: athulkrishna2015/ankiweb-api@v1
-        with:
-          username: ${{ secrets.ANKIWEB_USERNAME }}
-          password: ${{ secrets.ANKIWEB_PASSWORD }}
-          addon-id: 542586361
-          title: Anki_Terminator_Companion
-          tags: Performance, Optimization, CPU, Memory, Gemini, ChatGPT, DeepSeek
-          support-page: https://github.com/athulkrishna2015/Anki_Terminator_Companion
-          branches: 2.1.1-26.05+
-          description-file: README.md
-          addon-files: ${{ steps.build.outputs.ankiaddon }}

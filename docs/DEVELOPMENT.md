@@ -8,13 +8,13 @@ Local setup, testing, versioning, and building release packages.
 
 ```
 Anki_Terminator_Companion/ (Repo Root)
-├── README.md                 # User-facing overview (also the AnkiWeb listing description)
+├── README.md                 # User-facing overview + manual installation steps
 ├── CHANGELOG.md              # Version history
-├── AGENTS.md                 # Release/CI + AnkiWeb listing + credential reference
+├── AGENTS.md                 # Release/CI + distribution (GitHub-only) reference
 ├── bump.py                   # SemVer version bump utility
 ├── make_ankiaddon.py         # Packaging script → .ankiaddon
 ├── .github/workflows/
-│   └── release.yml           # CI: check → build → GitHub release → AnkiWeb upload
+│   └── release.yml           # CI: check → build → attach .ankiaddon to GitHub release
 ├── docs/
 │   ├── ARCHITECTURE.md       # Internal architecture & patch details
 │   ├── CONFIGURATION.md      # Config keys, defaults, JSON reference
@@ -54,13 +54,13 @@ Anki_Terminator_Companion/ (Repo Root)
 
 ```shell
 # Linux
-ln -s "$(pwd)/addon" ~/.local/share/Anki2/addons21/Anki_Terminator_Companion
+ln -s "$(pwd)/addon" ~/.local/share/Anki2/addons21/Anki_Terminator_Performance_Companion
 
 # macOS
 ln -s "$(pwd)/addon" ~/Library/Application\ Support/Anki2/addons21/Anki_Terminator_Companion
 
 # Windows (PowerShell as Admin)
-New-Item -ItemType Junction -Path "$env:APPDATA\Anki2\addons21\Anki_Terminator_Companion" -Target "$(Get-Location)\addon"
+New-Item -ItemType Junction -Path "$env:APPDATA\Anki2\addons21\Anki_Terminator_Performance_Companion" -Target "$(Get-Location)\addon"
 ```
 
 ### Verification
@@ -142,37 +142,43 @@ The build:
 
 ### Release Flow
 
+The add-on is **not on AnkiWeb** — the listing was removed (issue #2). A GitHub release
+is the only distribution channel, and it is the only place users can download from.
+
 **Do not build or upload the `.ankiaddon` by hand.** CI does both. The trigger is
 publishing a GitHub release — creating a *draft* deliberately runs nothing.
 
 1. Make changes and test locally
 2. `python bump.py minor` (or `patch`) — updates `addon/VERSION` + `addon/manifest.json`
 3. Update `CHANGELOG.md`, and `README.md` if any user-facing setting changed
-   (`README.md` is the AnkiWeb listing description)
+   (`README.md` carries the manual install steps users land on from a release)
 4. `git add -A && git commit -m "Release vX.Y.Z: ..."`
 5. `git push origin master && git tag vX.Y.Z && git push origin vX.Y.Z`
 6. `gh release create vX.Y.Z --title "..." --notes "..."` — **not** `--draft`
-7. `gh run watch` to watch the build + AnkiWeb upload
+7. `gh run watch` to watch the build + release attach
 
-The workflow byte-compiles `addon/`, builds the package, attaches it to the release,
-and uploads to AnkiWeb listing **542586361**. See `AGENTS.md` for the full trigger
-table, listing constants, and the manual `workflow_dispatch` / `dry_run` options.
+The workflow byte-compiles `addon/`, builds the package, and attaches it to the GitHub
+release. See `AGENTS.md` for the full trigger table and the manual
+`workflow_dispatch` / `dry_run` options.
 
 A local `python make_ankiaddon.py` is still useful for inspecting the artifact, but
 its output is gitignored and never published.
 
+> **Users must update manually.** Anki does not auto-update a manually installed
+> add-on, so a release note should say "re-download and install over your existing
+> copy" whenever a version actually matters.
+
 ### CI Rehearsal
 
 Before cutting a release you can validate the whole pipeline without touching GitHub
-releases or AnkiWeb:
+releases:
 
 ```shell
 gh workflow run release.yml --ref master -f tag=v1.9.0 -f dry_run=true
 gh run watch
 ```
 
-This runs the syntax check, the build and the AnkiWeb description-size check, and
-**skips** the release attach and the AnkiWeb upload.
+This runs the syntax check and the build, and **skips** the release attach.
 
 ---
 
