@@ -76,6 +76,12 @@ def schedule_clipboard_restore(ai_text, backup_mime):
 
 def patch(dock_web_view_mod):
     target_addon_id = dock_web_view_mod.__name__.split('.')[0]
+    # These patches wrap QWebEnginePage.runJavaScript and QClipboard.setText.
+    # Applying them twice would wrap our own wrapper, doubling every JS dispatch
+    # and leaving the previous wrapper's closure chain alive.
+    if getattr(dock_web_view_mod, "_companion_lifecycle_patched", False):
+        companion_logger.log(f"[Lifecycle Patch] Already applied for {target_addon_id}; skipping.")
+        return
     companion_logger.log(f"[Lifecycle Patch] Initiating Flicker-Free QStackedWidget and Response Monitor hooks for target {target_addon_id}...")
 
     # Hook QClipboard to backup and restore previous clipboard content when target addon copies
@@ -210,6 +216,7 @@ def patch(dock_web_view_mod):
         self.last_text_length = 0
         self.stable_checks = 0
         self.is_hovered = False
+        self._companion_monitor_running = False
         # Create static screenshot label overlaying the webview
         self.snapshot_label = QLabel(self)
         self.snapshot_label.setScaledContents(True)
@@ -985,18 +992,32 @@ def patch(dock_web_view_mod):
     dock_web_view_mod.ResizableWebView.leaveEvent = new_leaveEvent
 
     # Response progress monitor to auto-detect when Gemini finishes responding
+    def stop_response_monitoring(sidebar):
+        sidebar._companion_monitor_running = False
+
     def start_response_monitoring(sidebar):
         sidebar.is_responding = True
+        # Every prompt submission runs JS containing "replaceValue"/"execCommand",
+        # so without this guard each one started another 2s poll chain on the same
+        # sidebar. The chains shared `stable_checks`, so they all woke up every 2s
+        # and issued their own round-trip to the renderer for as long as the
+        # response stayed unstable. One chain per sidebar is enough.
+        if getattr(sidebar, "_companion_monitor_running", False):
+            sidebar.stable_checks = 0
+            return
+        sidebar._companion_monitor_running = True
         sidebar.last_text_length = 0
         sidebar.stable_checks = 0
-        
+
         def check_response_progress():
             if not sidebar.is_responding:
+                stop_response_monitoring(sidebar)
                 return
-                
+
             def on_length_retrieved(length):
                 try:
                     if not sidebar.is_responding:
+                        stop_response_monitoring(sidebar)
                         return
                     val = int(length) if length is not None else 0
                     if val > 0 and val == sidebar.last_text_length:
@@ -1006,19 +1027,22 @@ def patch(dock_web_view_mod):
                         sidebar.last_text_length = val
                     if sidebar.stable_checks >= 3:
                         sidebar.is_responding = False
+                        stop_response_monitoring(sidebar)
                         freeze_sidebar(sidebar)
                     else:
                         QTimer.singleShot(2000, check_response_progress)
                 except Exception:
                     sidebar.is_responding = False
+                    stop_response_monitoring(sidebar)
                     freeze_sidebar(sidebar)
 
             try:
                 sidebar.webview.page().runJavaScript("document.body ? document.body.innerText.length : 0;", on_length_retrieved)
             except Exception:
                 sidebar.is_responding = False
+                stop_response_monitoring(sidebar)
                 freeze_sidebar(sidebar)
-                
+
         QTimer.singleShot(4000, check_response_progress)
 
     def find_sidebar_from_page(page):
@@ -1189,3 +1213,5 @@ def patch(dock_web_view_mod):
             except: pass
         config_mod.SetPopupConfig.save_config_fontfamiles = new_save_config
     except: pass
+
+    dock_web_view_mod._companion_lifecycle_patched = True

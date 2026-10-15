@@ -25,6 +25,9 @@ def inject_gemini_performance_css(page: QWebEnginePage):
 
 def patch(dock_web_view_mod):
     target_addon_id = dock_web_view_mod.__name__.split('.')[0]
+    if getattr(dock_web_view_mod, "_companion_css_patched", False):
+        companion_logger.log(f"[CSS Patch] Already applied for {target_addon_id}; skipping.")
+        return
     original_inject = dock_web_view_mod.ResizableWebView.inject_javascript
 
     def patched_inject(self):
@@ -42,4 +45,5 @@ def patch(dock_web_view_mod):
             inject_gemini_performance_css(self.webpage)
 
     dock_web_view_mod.ResizableWebView.inject_javascript = patched_inject
+    dock_web_view_mod._companion_css_patched = True
     companion_logger.log(f"Successfully hooked ResizableWebView.inject_javascript for CSS injection (target: {target_addon_id}).")

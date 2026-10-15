@@ -7,6 +7,9 @@ from ..logger import companion_logger
 
 def patch(dock_web_view_mod):
     target_addon_id = dock_web_view_mod.__name__.split('.')[0]
+    if getattr(dock_web_view_mod, "_companion_popup_nav_patched", False):
+        companion_logger.log(f"[Popup Nav Patch] Already applied for {target_addon_id}; skipping.")
+        return
     companion_logger.log("[Popup Nav Patch] Initiating popup navigation controls patch...")
 
     original_createWindow = dock_web_view_mod.CustomWebEnginePage.createWindow
@@ -24,6 +27,7 @@ def patch(dock_web_view_mod):
                 return new_page
 
             nav_widget = QWidget()
+            nav_widget.setObjectName("companion_popup_nav")
             nav_widget.setMaximumHeight(30)
             nav_layout = QHBoxLayout(nav_widget)
             nav_layout.setContentsMargins(4, 2, 4, 2)
@@ -58,6 +62,17 @@ def patch(dock_web_view_mod):
             nav_layout.addWidget(btn_reload)
             nav_layout.addWidget(btn_home)
             nav_layout.addWidget(address_bar)
+
+            # The target addon reuses one `mw.AnkiTerminator_new_dialog` for every popup it
+            # opens, and only clears it when the sidebar closes. Inserting a fresh
+            # nav bar per popup therefore stacked one more set of buttons, a line
+            # edit and their signal closures onto the same layout for the lifetime
+            # of the sidebar. Drop the previous bar first.
+            for existing in dialog.findChildren(QWidget):
+                if existing.objectName() == "companion_popup_nav":
+                    layout.removeWidget(existing)
+                    existing.setParent(None)
+                    existing.deleteLater()
 
             layout.insertWidget(0, nav_widget)
 
@@ -100,4 +115,5 @@ def patch(dock_web_view_mod):
         return new_page
 
     dock_web_view_mod.CustomWebEnginePage.createWindow = new_createWindow
+    dock_web_view_mod._companion_popup_nav_patched = True
     companion_logger.log("[Popup Nav Patch] Successfully patched CustomWebEnginePage.createWindow.")
