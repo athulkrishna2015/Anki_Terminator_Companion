@@ -12,6 +12,17 @@ __pycache__/
 addon/companion.log
 *.log
 
+# Runtime state written by Anki into the add-on directory on every launch.
+# addon/meta.json holds last_seen_version/supporter_opt_out plus Anki's own
+# meta keys (disabled, mod, conflicts, update_enabled). It is developer
+# machine state, not source: it must not be committed, and because
+# make_ankiaddon.py honours .gitignore it must not ship either, or every
+# user would receive a copy of the maintainer's last_seen_version.
+addon/meta.json
+
+# Third-party CLI state
+.antigravitycli/
+
 # Editor & OS files
 .DS_Store
 .vscode/
