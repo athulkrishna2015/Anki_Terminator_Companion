@@ -2,7 +2,7 @@
 
 All notable changes to the Anki Terminator Companion addon will be documented in this file.
 
-### Unreleased
+### October 24, 2026 (v1.9.3)
 - **Gemini scroll-to-top after deep idle (bug fix)**:
   - After a long idle the companion unloads the sidebar page to `about:blank` so Chromium frees the renderer's heap, then restores the original URL on the next thaw. Restoring reloaded the page from scratch, which reset the scroll position to the top — so the latest response (at the bottom) disappeared and the user had to scroll all the way down again.
   - The scroll position is now captured (via a brief reactivation of the frozen page) before the unload, and restored with `window.scrollTo` once the reloaded page has painted. The frozen snapshot also stays visible until after the restore, so there is no flash of the top of the page.
