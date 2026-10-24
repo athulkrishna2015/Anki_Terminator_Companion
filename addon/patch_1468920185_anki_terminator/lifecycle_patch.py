@@ -217,6 +217,10 @@ def patch(dock_web_view_mod):
         self.stable_checks = 0
         self.is_hovered = False
         self._companion_monitor_running = False
+        # Deep-freeze scroll preservation
+        self._deep_frozen_url = None
+        self._deep_frozen_scroll_y = 0
+        self._deep_restore_pending = False
         # Create static screenshot label overlaying the webview
         self.snapshot_label = QLabel(self)
         self.snapshot_label.setScaledContents(True)
@@ -441,9 +445,24 @@ def patch(dock_web_view_mod):
                 companion_logger.log("[Lifecycle Patch] Deep-idle unload finished; keeping frozen snapshot visible.")
                 return
             if hasattr(self, "snapshot_label"):
-                # Delay hiding to ensure page is actually painted
-                QTimer.singleShot(150, self.snapshot_label.hide)
+                # Delay hiding to ensure page is actually painted. After a deep
+                # freeze restore we also need the scroll position to be back in
+                # place first, otherwise the user briefly sees the top of the page.
+                if getattr(self, "_deep_restore_pending", False):
+                    QTimer.singleShot(400, self.snapshot_label.hide)
+                else:
+                    QTimer.singleShot(150, self.snapshot_label.hide)
             if success:
+                # If this load followed a deep freeze, restore the scroll
+                # position captured before the unload, so the latest response
+                # stays in view instead of jumping to the top of a reloaded page.
+                if getattr(self, "_deep_restore_pending", False):
+                    self._deep_restore_pending = False
+                    saved_y = getattr(self, "_deep_frozen_scroll_y", 0)
+                    self._deep_frozen_scroll_y = 0
+                    if saved_y:
+                        QTimer.singleShot(300, lambda: self.webview.page().runJavaScript(f"window.scrollTo(0, {int(saved_y)});"))
+                        companion_logger.log(f"[Lifecycle Patch] Restored scroll position after deep freeze: {saved_y}px")
                 if not hasattr(self, "home_url") or not self.home_url:
                     self.home_url = self.webview.url().toString()
                     companion_logger.log(f"[Lifecycle Patch] Captured Home URL: {self.home_url}")
@@ -842,17 +861,50 @@ def patch(dock_web_view_mod):
             url = page.url()
             if not url.isValid() or url.toString() in ("about:blank", ""):
                 return
-            # Only remember the URL once the page actually navigated to about:blank,
-            # so a failed setUrl can't leave a stale URL that reloads on every thaw.
-            # Flag the navigation first: the sidebar's own loadStarted/loadFinished
-            # handlers hide the snapshot and re-schedule a freeze, which would
-            # expose the blank page and then overwrite the screenshot with black.
-            sidebar._companion_deep_unload = True
-            page.setUrl(QUrl("about:blank"))
-            sidebar._deep_frozen_url = url
-            companion_logger.log(
-                f"[Lifecycle Patch] Deep idle: cleared page ({url.toString()}) to free renderer memory."
-            )
+
+            # Capture the scroll position before unloading, so the restored
+            # page can be scrolled back to where the user left it instead of
+            # jumping to the top (which hid the latest response behind a
+            # reloaded page).
+            def do_unload(scroll_y):
+                try:
+                    try:
+                        sidebar._deep_frozen_scroll_y = int(scroll_y) if scroll_y is not None else 0
+                    except (TypeError, ValueError):
+                        sidebar._deep_frozen_scroll_y = 0
+                    sidebar._deep_restore_pending = True
+                    # Flag the navigation first: the sidebar's own loadStarted/
+                    # loadFinished handlers hide the snapshot and re-schedule a
+                    # freeze, which would expose the blank page and then
+                    # overwrite the screenshot with black.
+                    sidebar._companion_deep_unload = True
+                    page.setUrl(QUrl("about:blank"))
+                    sidebar._deep_frozen_url = url
+                    companion_logger.log(
+                        f"[Lifecycle Patch] Deep idle: cleared page ({url.toString()}) to free renderer memory."
+                    )
+                except Exception as e:
+                    companion_logger.log(f"[Lifecycle Patch] Deep freeze unload failed: {e}")
+
+            # The page is frozen by now, so briefly reactivate it to read the
+            # scroll position; fall back to 0 (top) if the eval never returns.
+            try:
+                page.setLifecycleState(dock_web_view_mod.QWebEnginePage.LifecycleState.Active)
+            except Exception:
+                pass
+            _done = {"v": False}
+
+            def _cb(val):
+                if _done["v"]:
+                    return
+                _done["v"] = True
+                do_unload(val)
+
+            try:
+                page.runJavaScript("window.scrollY || document.documentElement.scrollTop || 0;", _cb)
+            except Exception:
+                _cb(0)
+            QTimer.singleShot(2000, lambda: _cb(0))
         except Exception as e:
             companion_logger.log(f"[Lifecycle Patch] Deep freeze failed: {e}")
 
@@ -883,6 +935,9 @@ def patch(dock_web_view_mod):
             # reported loadFinished (page already blank, navigation cancelled, ...),
             # leaving it set would make the NEXT real page load get ignored.
             sidebar._companion_deep_unload = False
+            # Remember that the upcoming loadFinished should restore the scroll
+            # position captured before the deep freeze.
+            sidebar._deep_restore_pending = True
             page.setUrl(url)
             companion_logger.log(f"[Lifecycle Patch] Restored page after deep freeze: {url.toString()}")
         except Exception as e:
